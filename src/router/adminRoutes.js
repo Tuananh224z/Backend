@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 
 // Middlewares
-const { protect, restrictTo } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
+const isAdmin = require('../middleware/isAdmin');
 const upload = require('../middleware/upload');
 
 // Controllers
@@ -19,7 +20,7 @@ const { getStatsSummary, getChatbotStats, getUserStats } = require('../controlle
 
 // Apply protection and role restriction to all admin routes
 router.use(protect);
-router.use(restrictTo('admin'));
+router.use(isAdmin);
 
 // Brands management
 router.post('/brands', createBrand);

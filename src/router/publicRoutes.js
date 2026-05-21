@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 
+// Middlewares
+const loginLimiter = require('../middleware/loginLimiter');
+
 // Controllers
 const { register, login } = require('../controllers/authController');
 const { getBrands, getBrandByIdOrSlug } = require('../controllers/brandController');
@@ -12,7 +15,7 @@ const { getSettings } = require('../controllers/settingController');
 
 // Authentication public routes
 router.post('/auth/register', register);
-router.post('/auth/login', login);
+router.post('/auth/login', loginLimiter, login);
 
 // Brands public routes
 router.get('/brands', getBrands);
