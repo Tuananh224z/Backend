@@ -89,34 +89,10 @@ const changePassword = async (req, res) => {
   }
 };
 
-const toggleFavorite = async (req, res) => {
-  try {
-    const { productId } = req.params;
-    if (!productId) {
-      return res.status(400).json({
-        status: "fail",
-        message: "Vui lòng cung cấp productId",
-      });
-    }
-    const result = await authService.toggleFavoriteProduct(req.user._id, productId);
-    res.status(200).json({
-      status: "success",
-      message: result.isAdded ? "Đã thêm vào sản phẩm yêu thích" : "Đã xóa khỏi sản phẩm yêu thích",
-      data: result.user,
-    });
-  } catch (error) {
-    res.status(400).json({
-      status: "fail",
-      message: error.message,
-    });
-  }
-};
-
 module.exports = {
   register,
   login,
   getProfile,
   updateProfile,
   changePassword,
-  toggleFavorite,
 };

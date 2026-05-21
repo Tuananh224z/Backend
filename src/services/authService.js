@@ -75,7 +75,7 @@ const loginUser = async (email, password) => {
  * Service to retrieve profile.
  */
 const getUserProfile = async (userId) => {
-  const user = await User.findById(userId).select("-password").populate("favorites");
+  const user = await User.findById(userId).select("-password");
   if (!user) {
     throw new Error("Người dùng không tồn tại");
   }
@@ -96,7 +96,7 @@ const updateUserProfile = async (userId, profileData) => {
     }
   });
 
-  const updatedUser = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true, runValidators: true }).select("-password").populate("favorites");
+  const updatedUser = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true, runValidators: true }).select("-password");
 
   if (!updatedUser) {
     throw new Error("Người dùng không tồn tại");
@@ -128,39 +128,10 @@ const changeUserPassword = async (userId, oldPassword, newPassword) => {
   return { message: "Đổi mật khẩu thành công" };
 };
 
-/**
- * Service to toggle product favorite status.
- */
-const toggleFavoriteProduct = async (userId, productId) => {
-  const user = await User.findById(userId);
-  if (!user) {
-    throw new Error("Người dùng không tồn tại");
-  }
-
-  if (!user.favorites) {
-    user.favorites = [];
-  }
-
-  const index = user.favorites.indexOf(productId);
-  let isAdded = false;
-  if (index === -1) {
-    user.favorites.push(productId);
-    isAdded = true;
-  } else {
-    user.favorites.splice(index, 1);
-    isAdded = false;
-  }
-
-  await user.save();
-  const updatedUser = await User.findById(userId).select("-password").populate("favorites");
-  return { user: updatedUser, isAdded };
-};
-
 module.exports = {
   registerUser,
   loginUser,
   getUserProfile,
   updateUserProfile,
   changeUserPassword,
-  toggleFavoriteProduct,
 };

@@ -5,7 +5,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 
 // Controllers
-const { getProfile, updateProfile, changePassword, toggleFavorite } = require('../controllers/authController');
+const { getProfile, updateProfile, changePassword } = require('../controllers/authController');
 const { getCart, addToCart, updateCartItem, removeFromCart, clearCart } = require('../controllers/cartController');
 const { createOrder, getMyOrders, getOrderById, cancelOrder, payOrder } = require('../controllers/orderController');
 const { createReview, deleteReview } = require('../controllers/reviewController');
@@ -17,7 +17,6 @@ router.use(protect);
 router.get('/auth/profile', getProfile);
 router.put('/auth/profile', updateProfile);
 router.put('/auth/change-password', changePassword);
-router.post('/auth/favorites/:productId', toggleFavorite);
 
 // Cart management
 router.get('/cart', getCart);

@@ -43,12 +43,6 @@ const userSchema = new mongoose.Schema(
       district: { type: String, default: "" },
       city: { type: String, default: "" },
     },
-    favorites: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Product",
-      },
-    ],
   },
   {
     timestamps: true,
