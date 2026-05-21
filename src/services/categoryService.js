@@ -4,7 +4,11 @@ const Category = require("../../models/category");
  * Get active categories.
  */
 const getAllCategories = async (query = {}) => {
-  const filter = { isActive: true, ...query };
+  const { showAll, ...rest } = query;
+  const filter = { ...rest };
+  if (showAll !== "true" && showAll !== true) {
+    filter.isActive = true;
+  }
   return await Category.find(filter);
 };
 

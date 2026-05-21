@@ -6,8 +6,11 @@ const Brand = require("../../models/brand");
  * Get filtered and paginated list of active products.
  */
 const queryProducts = async (queryParams) => {
-  const { category, brand, minPrice, maxPrice, search, isFeatured, promotion, sortBy, page = 1, limit = 10 } = queryParams;
-  const filter = { isActive: true };
+  const { category, brand, minPrice, maxPrice, search, isFeatured, promotion, sortBy, page = 1, limit = 10, showAll } = queryParams;
+  const filter = {};
+  if (showAll !== "true" && showAll !== true) {
+    filter.isActive = true;
+  }
 
   // 1. Lọc theo danh mục
   if (category) {
@@ -121,7 +124,29 @@ const getProductByIdOrSlug = async (idOrSlug) => {
  * Admin: Create a new product.
  */
 const createProduct = async (productData) => {
-  const { name, slug, category, brand, price, discountPrice, images, stock, description, specs, isFeatured, isActive } = productData;
+  const {
+    name,
+    slug,
+    category,
+    brand,
+    price,
+    discountPrice,
+    images,
+    stock,
+    description,
+    specs,
+    isFeatured,
+    isActive,
+    sku,
+    sortOrder,
+    shortDesc,
+    isBestSeller,
+    isNewArrival,
+    isHot,
+    tags,
+    summary,
+    specGroups,
+  } = productData;
 
   const finalSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
@@ -143,6 +168,15 @@ const createProduct = async (productData) => {
     specs,
     isFeatured,
     isActive,
+    sku,
+    sortOrder,
+    shortDesc,
+    isBestSeller,
+    isNewArrival,
+    isHot,
+    tags,
+    summary,
+    specGroups,
   });
 };
 

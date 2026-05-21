@@ -4,7 +4,11 @@ const Brand = require("../../models/brand");
  * Get active brands (public).
  */
 const getAllBrands = async (query = {}) => {
-  const filter = { isActive: true, ...query };
+  const { showAll, ...rest } = query;
+  const filter = { ...rest };
+  if (showAll !== "true" && showAll !== true) {
+    filter.isActive = true;
+  }
   return await Brand.find(filter);
 };
 

@@ -41,6 +41,18 @@ const productSchema = new mongoose.Schema(
         message: "Giá khuyến mại phải nhỏ hơn giá bán gốc",
       },
     },
+    sku: {
+      type: String,
+      default: "",
+    },
+    sortOrder: {
+      type: Number,
+      default: 0,
+    },
+    shortDesc: {
+      type: String,
+      default: "",
+    },
     images: {
       type: [String],
       default: [],
@@ -55,7 +67,11 @@ const productSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    // Thông số cấu hình laptop chi tiết
+    summary: {
+      type: String,
+      default: "",
+    },
+    // Thông số cấu hình laptop chi tiết (legacy)
     specs: {
       cpu: { type: String, default: "" },
       ram: { type: String, default: "" },
@@ -66,13 +82,41 @@ const productSchema = new mongoose.Schema(
       weight: { type: Number, default: 0 }, // kg
       os: { type: String, default: "Windows 11" },
     },
+    // Thông số kỹ thuật phân nhóm động (mockup mới)
+    specGroups: [
+      {
+        name: { type: String, default: "" },
+        items: [
+          {
+            key: { type: String, default: "" },
+            value: { type: String, default: "" },
+          },
+        ],
+      },
+    ],
     isFeatured: {
+      type: Boolean,
+      default: false,
+    },
+    isBestSeller: {
+      type: Boolean,
+      default: false,
+    },
+    isNewArrival: {
+      type: Boolean,
+      default: false,
+    },
+    isHot: {
       type: Boolean,
       default: false,
     },
     isActive: {
       type: Boolean,
       default: true,
+    },
+    tags: {
+      type: [String],
+      default: [],
     },
     ratingsAverage: {
       type: Number,
