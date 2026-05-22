@@ -127,7 +127,87 @@ const processCassoWebhook = async (headers, body) => {
   return { success: true };
 };
 
+const axios = require('axios');
+
+let lastSyncTime = 0;
+const SYNC_COOLDOWN = 10000; // 10s cooldown to avoid spamming the Casso API
+
+const syncCassoTransactions = async () => {
+  const now = Date.now();
+  if (now - lastSyncTime < SYNC_COOLDOWN) {
+    console.log('[CASSO SYNC] Đang trong thời gian chờ (cooldown 10s). Bỏ qua.');
+    return { success: true, message: 'Cooldown active' };
+  }
+  
+  const apiKey = process.env.CASSO_API_KEY;
+  if (!apiKey) {
+    console.warn('[CASSO SYNC] Không tìm thấy CASSO_API_KEY trong .env');
+    return { success: false, message: 'No API Key found' };
+  }
+
+  try {
+    console.log('[CASSO SYNC] Bắt đầu đồng bộ giao dịch từ Casso API...');
+    const response = await axios.get('https://api.casso.vn/v2/transactions', {
+      headers: {
+        'Authorization': `Apikey ${apiKey}`
+      },
+      params: {
+        pageSize: 20,
+        sort: 'DESC'
+      }
+    });
+
+    if (response.data && response.data.data) {
+      const transactions = response.data.data;
+      console.log(`[CASSO SYNC] Lấy thành công ${transactions.length} giao dịch từ Casso`);
+      
+      let matchedCount = 0;
+      for (const transaction of transactions) {
+        const { description, amount, tid, when } = transaction;
+        const cleanDesc = (description || '').replace(/[\s-]/g, '');
+        const match = cleanDesc.match(/(ORD)(\d{8})(\d{4})/i);
+        
+        if (match) {
+          const orderCode = `ORD-${match[2]}-${match[3]}`.toUpperCase();
+          const order = await Order.findOne({ orderCode });
+          
+          if (order) {
+            if (order.paymentStatus !== 'Paid') {
+              if (amount >= order.totalAmount) {
+                order.paymentStatus = 'Paid';
+                order.orderStatus = 'Confirmed';
+                order.paymentDetails = {
+                  gateway: 'CassoAPI',
+                  transactionId: tid,
+                  amountReceived: amount,
+                  paymentDate: when,
+                  rawDescription: description
+                };
+                await order.save();
+                matchedCount++;
+                console.log(`[CASSO SYNC THÀNH CÔNG] Đơn hàng ${orderCode} đã được tự động duyệt thanh toán!`);
+              } else {
+                console.warn(`[CASSO SYNC THẤT BẠI] Số tiền chuyển khoản (${amount}đ) nhỏ hơn tổng đơn (${order.totalAmount}đ)!`);
+              }
+            }
+          }
+        }
+      }
+      
+      lastSyncTime = now;
+      return { success: true, matchedCount };
+    } else {
+      console.warn('[CASSO SYNC] Phản hồi từ Casso API không hợp lệ:', response.data);
+      return { success: false, message: 'Invalid API response' };
+    }
+  } catch (error) {
+    console.error('[CASSO SYNC ERROR] Lỗi khi đồng bộ giao dịch từ Casso API:', error.response ? error.response.data : error.message);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   getQRPaymentInfo,
-  processCassoWebhook
+  processCassoWebhook,
+  syncCassoTransactions
 };

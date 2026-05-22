@@ -48,8 +48,44 @@ const handleCassoWebhook = async (req, res) => {
   }
 };
 
+const mockPayment = async (req, res) => {
+  try {
+    const { orderCode } = req.body;
+    const Order = require('../../models/order');
+    const order = await Order.findOne({ orderCode });
+    if (!order) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Không tìm thấy đơn hàng'
+      });
+    }
+    
+    order.paymentStatus = 'Paid';
+    order.orderStatus = 'Confirmed';
+    order.paymentDetails = {
+      gateway: 'MockPayment',
+      transactionId: 'MOCK-' + Date.now(),
+      amountReceived: order.totalAmount,
+      paymentDate: new Date(),
+      rawDescription: 'Giả lập thanh toán thành công'
+    };
+    await order.save();
+    
+    return res.status(200).json({
+      status: 'success',
+      message: 'Giả lập thanh toán thành công cho đơn hàng ' + orderCode
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   getQRPaymentInfo,
-  handleCassoWebhook
+  handleCassoWebhook,
+  mockPayment
 };
 

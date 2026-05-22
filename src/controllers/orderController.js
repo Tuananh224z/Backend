@@ -35,6 +35,22 @@ const getOrderById = async (req, res) => {
   try {
     // Nếu là admin thì không cần kiểm tra quyền sở hữu đơn hàng của user cụ thể
     const userId = req.user.role === "admin" ? null : req.user._id;
+
+    // Tìm đơn hàng cơ bản trước để xem có cần đồng bộ Casso không
+    const Order = require("../../models/order");
+    const basicQuery = { _id: req.params.id };
+    if (userId) basicQuery.user = userId;
+    const basicOrder = await Order.findOne(basicQuery);
+
+    if (basicOrder && basicOrder.paymentMethod === 'Online' && basicOrder.paymentStatus === 'Pending') {
+      const paymentService = require('../services/paymentService');
+      if (paymentService.syncCassoTransactions) {
+        await paymentService.syncCassoTransactions().catch(err => {
+          console.error('[CASSO AUTO-SYNC ERROR] Lỗi đồng bộ giao dịch Casso:', err);
+        });
+      }
+    }
+
     const order = await orderService.getOrderDetails(req.params.id, userId);
     
     // Đảm bảo không lưu cache để luôn lấy thông tin mới nhất
