@@ -12,30 +12,36 @@ const getChatbotReply = async (sessionToken, messageText) => {
   try {
     // 1. Phân tích từ khóa tìm kiếm nâng cao (Retrieval)
     let matchedProducts = [];
+    let upsellProducts = [];
     const textLower = messageText.toLowerCase();
 
-    // Phân tích khoảng giá (vd: "dưới 20tr", "dưới 20 triệu")
+    // Phân tích khoảng giá (vd: "dưới 20tr", "dưới 20 triệu", "laptop 20 triệu")
     let maxPrice = null;
-    const priceRegexes = [
-      /dưới\s*(\d+(?:[.,]\d+)?)\s*(?:triệu|tr)/i,
-      /tầm\s*(\d+(?:[.,]\d+)?)\s*(?:triệu|tr)/i,
-      /khoảng\s*(\d+(?:[.,]\d+)?)\s*(?:triệu|tr)/i,
-      /dưới\s*(\d{1,3}(?:\.\d{3})+(?:\.\d{3})?)\s*(?:đ|đồng|vnd)/i,
-      /dưới\s*(\d+)\s*(?:triệu|tr|trieu)/i
-    ];
+    let prices = [];
     
-    for (const regex of priceRegexes) {
-      const match = textLower.match(regex);
-      if (match) {
-        let val = match[1].replace(/[,.]/g, "");
-        const floatVal = parseFloat(val);
-        if (regex.source.includes("triệu") || regex.source.includes("tr")) {
-          maxPrice = floatVal * 1000000;
-        } else {
-          maxPrice = floatVal;
-        }
-        break;
-      }
+    // 1. Tìm tất cả các mức giá bằng triệu/tr/trieu
+    const trieuMatches = [...textLower.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:triệu|tr|trieu)\b/gi)];
+    for (const match of trieuMatches) {
+      let val = match[1].replace(/[,.]/g, "");
+      prices.push(parseFloat(val) * 1000000);
+    }
+    
+    // 2. Tìm tất cả các mức giá bằng nghìn/ngàn/k
+    const nghinMatches = [...textLower.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:nghìn|ngàn|k)\b/gi)];
+    for (const match of nghinMatches) {
+      let val = match[1].replace(/[,.]/g, "");
+      prices.push(parseFloat(val) * 1000);
+    }
+    
+    // 3. Tìm tất cả các mức giá bằng đ/đồng/vnd
+    const vndMatches = [...textLower.matchAll(/(\d{1,3}(?:\.\d{3})+(?:\.\d{3})?|\d{5,})\s*(?:đ|đồng|vnd)\b/gi)];
+    for (const match of vndMatches) {
+      let val = match[1].replace(/[,.]/g, "");
+      prices.push(parseFloat(val));
+    }
+    
+    if (prices.length > 0) {
+      maxPrice = Math.max(...prices);
     }
 
     // Phân tích danh mục (vd: "laptop", "pc", "chuột", "bàn phím"...)
@@ -93,6 +99,16 @@ const getChatbotReply = async (sessionToken, messageText) => {
       matchedProducts = await Product.find(query)
         .select("name price discountPrice specs slug description")
         .limit(6);
+
+      if (maxPrice) {
+        const upsellQuery = { ...query };
+        delete upsellQuery.price;
+        upsellQuery.price = { $gt: maxPrice, $lte: maxPrice * 1.25 };
+        
+        upsellProducts = await Product.find(upsellQuery)
+          .select("name price discountPrice specs slug description")
+          .limit(4);
+      }
     }
 
     // Nếu bộ lọc không ra kết quả hoặc không có bộ lọc cụ thể, dùng Text Index
@@ -107,6 +123,16 @@ const getChatbotReply = async (sessionToken, messageText) => {
       })
         .select("name price discountPrice specs slug description")
         .limit(4);
+
+      if (maxPrice) {
+        upsellProducts = await Product.find({
+          isActive: true,
+          price: { $gt: maxPrice, $lte: maxPrice * 1.25 },
+          $text: { $search: messageText }
+        })
+          .select("name price discountPrice specs slug description")
+          .limit(3);
+      }
     }
 
     // Fallback cuối cùng nếu vẫn không có sản phẩm nào
@@ -124,6 +150,19 @@ const getChatbotReply = async (sessionToken, messageText) => {
       })
         .select("name price discountPrice specs slug description")
         .limit(4);
+
+      if (maxPrice) {
+        upsellProducts = await Product.find({
+          isActive: true,
+          price: { $gt: maxPrice, $lte: maxPrice * 1.25 },
+          $or: [
+            { isFeatured: true },
+            { isBestSeller: true }
+          ]
+        })
+          .select("name price discountPrice specs slug description")
+          .limit(3);
+      }
     }
 
     // 2. Lấy cấu hình hệ thống & System Prompt
@@ -136,19 +175,25 @@ const getChatbotReply = async (sessionToken, messageText) => {
         
         NGUYÊN TẮC VÀNG:
         1. TRẢ LỜI ĐÚNG TRỌNG TÂM: Không dài dòng, không giải thích lý thuyết. Khách hỏi gì đáp nấy.
-        2. SO SÁNH GIÁ CHUẨN XÁC: Hiểu rõ "triệu" hoặc "tr" tương đương với 1.000.000. Phải đối chiếu số tiền khách yêu cầu với "Giá trị số (VNĐ)" của từng sản phẩm. Tuyệt đối KHÔNG giới thiệu sản phẩm có "Giá trị số (VNĐ)" lớn hơn ngân sách khách yêu cầu, KỂ CẢ dưới hình thức gợi ý thêm hay phương án thay thế.
+        2. SO SÁNH GIÁ CHUẨN XÁC: Hiểu rõ "triệu" hoặc "tr" tương đương với 1.000.000. Phải phân biệt rõ ràng giữa sản phẩm "Phù hợp ngân sách" (<= số tiền khách hỏi) và sản phẩm "Vượt ngân sách một chút" (> số tiền khách hỏi).
         3. CHỈ DÙNG DỮ LIỆU THẬT & ĐÚNG DANH MỤC: Chỉ được giới thiệu sản phẩm nằm trong danh sách được cung cấp dưới đây và phải khớp đúng danh mục khách yêu cầu (Ví dụ: khách hỏi "laptop" thì tuyệt đối không tư vấn "chuột" hay "vga").
-        4. CẤM TUYỆT ĐỐI GIỚI THIỆU VƯỢT NGÂN SÁCH: Nếu không có sản phẩm nào thỏa mãn mức giá yêu cầu, PHẢI TRẢ LỜI THÀNH THẬT là cửa hàng hiện chưa có sản phẩm phù hợp. KHÔNG ĐƯỢC giới thiệu bất kỳ sản phẩm nào đắt hơn ngân sách của khách.
+        4. XỬ LÝ NGÂN SÁCH THÔNG MINH:
+           - Nếu có sản phẩm nằm trong danh sách phù hợp với ngân sách của khách (dưới hoặc bằng ngân sách), chỉ giới thiệu những sản phẩm đó.
+           - Nếu KHÔNG CÓ sản phẩm nào phù hợp ngân sách, hãy thông báo trung thực là hiện chưa có dòng sản phẩm trong tầm giá khách yêu cầu. ĐỒNG THỜI, hãy gợi ý cho khách hàng là nếu có thể cố gắng "nhích ngân sách lên một chút" tầm khoảng 23 - 24 triệu thì cửa hàng có các dòng máy chất lượng tốt hơn (liệt kê các sản phẩm vượt ngân sách một chút kèm theo giá bán rõ ràng để khách hàng tự so sánh).
         5. ĐỊNH DẠNG: Trình bày danh sách sản phẩm theo dạng danh sách gạch đầu dòng, mỗi sản phẩm viết gọn trên đúng 1 DÒNG duy nhất. Tuyệt đối không xuống dòng hay tạo các dòng phụ thụt lề cho cùng một sản phẩm. Công thức định dạng bắt buộc: "- [Tên sản phẩm](/product/slug): Giá tiền - Mô tả ngắn" (Ví dụ: "- [Laptop Lenovo IdeaPad 330S](/product/lenovo-ideapad-330s): 14.990.000₫ - Laptop thin và nhẹ, hiệu suất mạnh mẽ.").
         6. LUÔN CẢM ƠN: Ở cuối mỗi câu trả lời, luôn thêm một câu cảm ơn thân thiện gửi đến khách hàng (Ví dụ: "Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!", "Cảm ơn bạn nhé!").
         
         VÍ DỤ NẾU KHÔNG CÓ SẢN PHẨM PHÙ HỢP:
-        Khách: "Tư vấn chuột dưới 100 nghìn" (trong kho chỉ có chuột 2.390.000₫)
-        AI: "Xin lỗi bạn, hiện tại TechStore chưa có mẫu chuột nào có mức giá dưới 100.000₫ phù hợp với yêu cầu của bạn ạ! Bạn có thể cân nhắc nâng thêm ngân sách hoặc theo dõi thêm cửa hàng để cập nhật các mẫu mới nhé. Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!"
+        Khách: "Tư vấn laptop 20 triệu" (trong kho không có máy dưới 20 triệu, chỉ có các dòng máy 23 - 25 triệu)
+        AI: "Xin lỗi bạn, hiện tại TechStore chưa có mẫu laptop nào có mức giá dưới 20.000.000₫ phù hợp với yêu cầu của bạn ạ! Tuy nhiên, nếu bạn có thể cân nhắc nhích ngân sách lên một chút tầm khoảng 23 - 24 triệu thì bên mình đang sẵn các dòng laptop cực kỳ chất lượng sau:
+        - [Laptop gaming MSI Katana A15 AI B8VE 402VN](/product/laptop-gaming-msi-katana-a15-ai-b8ve-402vn): 23.990.000₫ - Laptop gaming mạnh mẽ với CPU AMD Ryzen R7-8845HS.
+        - [Laptop gaming Acer Aspire 7 A715 59G 55MD](/product/laptop-gaming-acer-aspire-7-a715-59g-55md): 24.990.000₫ - Laptop hiệu năng cao, thiết kế bền bỉ.
+        
+        Bạn xem qua thử nhé. Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!"
 
         DANH SÁCH SẢN PHẨM TRONG KHO:
         \${productContext}`,
-          temperature: 0,
+          temperature: 0.7,
           maxTokens: 500
         }
       };
@@ -160,7 +205,12 @@ const getChatbotReply = async (sessionToken, messageText) => {
       return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "₫";
     };
 
-    let productContext = "CÁC SẢN PHẨM HIỆN CÓ TẠI CỬA HÀNG:\n";
+    let productContext = "";
+    if (maxPrice) {
+      productContext += `YÊU CẦU NGÂN SÁCH CỦA KHÁCH HÀNG: tối đa ${formatPriceVND(maxPrice)}\n\n`;
+    }
+
+    productContext += "DANH SÁCH SẢN PHẨM PHÙ HỢP VỚI NGÂN SÁCH KHÁCH HÀNG (Giá <= ngân sách):\n";
     if (matchedProducts.length > 0) {
       matchedProducts.forEach((p, idx) => {
         const displayPrice = formatPriceVND(p.price);
@@ -171,12 +221,29 @@ const getChatbotReply = async (sessionToken, messageText) => {
           priceStr = `${displayPrice} (đang giảm giá, giá cũ ${originalPrice})`;
         }
         
-        productContext += `${idx + 1}. ${p.name} - Giá trị số (VNĐ): ${p.price} (${priceStr})\n`;
-        productContext += `   - Cấu hình: CPU ${p.specs.cpu || "N/A"}, RAM ${p.specs.ram || "N/A"}, Ổ cứng ${p.specs.storage || "N/A"}, VGA ${p.specs.vga || "N/A"}, Màn hình ${p.specs.screenSize || "N/A"}, HĐH ${p.specs.os || "N/A"}\n`;
-        productContext += `   - Link xem chi tiết: /product/${p.slug}\n\n`;
+        productContext += `- ${p.name} - Giá trị số (VNĐ): ${p.price} (${priceStr})\n`;
+        productContext += `  Cấu hình: CPU ${p.specs.cpu || "N/A"}, RAM ${p.specs.ram || "N/A"}, Ổ cứng ${p.specs.storage || "N/A"}, VGA ${p.specs.vga || "N/A"}, Màn hình ${p.specs.screenSize || "N/A"}, HĐH ${p.specs.os || "N/A"}\n`;
+        productContext += `  Link xem chi tiết: /product/${p.slug}\n\n`;
       });
     } else {
-      productContext += "(Hiện tại không có sản phẩm nào phù hợp yêu cầu trong kho)\n";
+      productContext += "(Không có sản phẩm nào phù hợp ngân sách của khách hàng trong kho)\n\n";
+    }
+
+    if (maxPrice && upsellProducts.length > 0) {
+      productContext += "DANH SÁCH SẢN PHẨM VƯỢT NGÂN SÁCH MỘT CHÚT (Để gợi ý thêm khi khách hàng hỏi nhưng không có máy phù hợp budget. Thường đắt hơn khoảng 10-25%): \n";
+      upsellProducts.forEach((p, idx) => {
+        const displayPrice = formatPriceVND(p.price);
+        const originalPrice = p.discountPrice && p.discountPrice > 0 ? formatPriceVND(p.discountPrice) : null;
+        
+        let priceStr = displayPrice;
+        if (originalPrice) {
+          priceStr = `${displayPrice} (đang giảm giá, giá cũ ${originalPrice})`;
+        }
+        
+        productContext += `- ${p.name} - Giá trị số (VNĐ): ${p.price} (${priceStr})\n`;
+        productContext += `  Cấu hình: CPU ${p.specs.cpu || "N/A"}, RAM ${p.specs.ram || "N/A"}, Ổ cứng ${p.specs.storage || "N/A"}, VGA ${p.specs.vga || "N/A"}, Màn hình ${p.specs.screenSize || "N/A"}, HĐH ${p.specs.os || "N/A"}\n`;
+        productContext += `  Link xem chi tiết: /product/${p.slug}\n\n`;
+      });
     }
 
     // 4. Lấy lịch sử hội thoại gần nhất (Memory) để duy trì ngữ cảnh chat
@@ -237,8 +304,8 @@ const getChatbotReply = async (sessionToken, messageText) => {
 
     const replyText = response.data.choices[0].message.content;
 
-    // Lấy danh sách ID sản phẩm gợi ý (là các sản phẩm ta đã tìm thấy và đưa vào ngữ cảnh)
-    const suggestedProductIds = matchedProducts.map((p) => p._id);
+    // Lấy danh sách ID sản phẩm gợi ý (bao gồm cả sản phẩm khớp và sản phẩm gợi ý thêm)
+    const suggestedProductIds = [...matchedProducts, ...upsellProducts].map((p) => p._id);
 
     return {
       reply: replyText,
