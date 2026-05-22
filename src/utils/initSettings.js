@@ -9,7 +9,7 @@ const initSystemSettings = async () => {
         2. SO SÁNH GIÁ CHUẨN XÁC: Hiểu rõ "triệu" hoặc "tr" tương đương với 1.000.000. Phải đối chiếu số tiền khách yêu cầu với "Giá trị số (VNĐ)" của từng sản phẩm. Tuyệt đối KHÔNG giới thiệu sản phẩm có "Giá trị số (VNĐ)" lớn hơn ngân sách khách yêu cầu, KỂ CẢ dưới hình thức gợi ý thêm hay phương án thay thế.
         3. CHỈ DÙNG DỮ LIỆU THẬT & ĐÚNG DANH MỤC: Chỉ được giới thiệu sản phẩm nằm trong danh sách được cung cấp dưới đây và phải khớp đúng danh mục khách yêu cầu (Ví dụ: khách hỏi "laptop" thì tuyệt đối không tư vấn "chuột" hay "vga").
         4. CẤM TUYỆT ĐỐI GIỚI THIỆU VƯỢT NGÂN SÁCH: Nếu không có sản phẩm nào thỏa mãn mức giá yêu cầu, PHẢI TRẢ LỜI THÀNH THẬT là cửa hàng hiện chưa có sản phẩm phù hợp. KHÔNG ĐƯỢC giới thiệu bất kỳ sản phẩm nào đắt hơn ngân sách của khách.
-        5. ĐỊNH DẠNG: Luôn dùng link định dạng Markdown và PHẢI KÈM THEO GIÁ SẢN PHẨM (Giá hiển thị). Ví dụ: "- [Tên sản phẩm](/product/slug): 27.990.000₫ - Mô tả ngắn...".
+        5. ĐỊNH DẠNG: Trình bày danh sách sản phẩm theo dạng danh sách gạch đầu dòng, mỗi sản phẩm viết gọn trên đúng 1 DÒNG duy nhất. Tuyệt đối không xuống dòng hay tạo các dòng phụ thụt lề cho cùng một sản phẩm. Công thức định dạng bắt buộc: "- [Tên sản phẩm](/products/slug): Giá tiền - Mô tả ngắn" (Ví dụ: "- [Laptop Lenovo IdeaPad 330S](/products/lenovo-ideapad-330s): 14.990.000₫ - Laptop thin và nhẹ, hiệu suất mạnh mẽ.").
         6. LUÔN CẢM ƠN: Ở cuối mỗi câu trả lời, luôn thêm một câu cảm ơn thân thiện gửi đến khách hàng (Ví dụ: "Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!", "Cảm ơn bạn nhé!").
         
         VÍ DỤ NẾU KHÔNG CÓ SẢN PHẨM PHÙ HỢP:
@@ -32,7 +32,7 @@ const initSystemSettings = async () => {
         chatbotConfig: {
           model: "llama-3.1-8b-instant",
           systemPrompt: defaultPrompt,
-          temperature: 0.7,
+          temperature: 0,
           maxTokens: 500,
         },
       });
@@ -45,7 +45,7 @@ const initSystemSettings = async () => {
         settings.chatbotConfig = {
           model: "llama-3.1-8b-instant",
           systemPrompt: defaultPrompt,
-          temperature: 0.7,
+          temperature: 0,
           maxTokens: 500,
         };
         isUpdated = true;
@@ -55,14 +55,10 @@ const initSystemSettings = async () => {
           isUpdated = true;
         }
         
-        // Cập nhật prompt sang Nguyên Tắc Vàng của người dùng
-        if (
-          !settings.chatbotConfig.systemPrompt ||
-          !settings.chatbotConfig.systemPrompt.includes("NGUYÊN TẮC VÀNG")
-        ) {
-          settings.chatbotConfig.systemPrompt = defaultPrompt;
-          isUpdated = true;
-        }
+        // Luôn luôn đồng bộ hóa prompt mới nhất từ Nguyên Tắc Vàng
+        settings.chatbotConfig.systemPrompt = defaultPrompt;
+        settings.chatbotConfig.temperature = 0; // Để cho chatbot trả lời đúng định dạng và ổn định nhất
+        isUpdated = true;
       }
 
       if (isUpdated) {
