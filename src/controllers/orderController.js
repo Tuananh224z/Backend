@@ -36,6 +36,12 @@ const getOrderById = async (req, res) => {
     // Nếu là admin thì không cần kiểm tra quyền sở hữu đơn hàng của user cụ thể
     const userId = req.user.role === "admin" ? null : req.user._id;
     const order = await orderService.getOrderDetails(req.params.id, userId);
+    
+    // Đảm bảo không lưu cache để luôn lấy thông tin mới nhất
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
     res.status(200).json({
       status: "success",
       data: order,

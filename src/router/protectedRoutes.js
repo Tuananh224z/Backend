@@ -9,6 +9,7 @@ const { getProfile, updateProfile, changePassword } = require('../controllers/au
 const { getCart, addToCart, updateCartItem, removeFromCart, clearCart } = require('../controllers/cartController');
 const { createOrder, getMyOrders, getOrderById, cancelOrder, payOrder } = require('../controllers/orderController');
 const { createReview, deleteReview } = require('../controllers/reviewController');
+const { getQRPaymentInfo } = require('../controllers/paymentController');
 
 // Apply protect middleware to all routes inside this router
 router.use(protect);
@@ -31,6 +32,7 @@ router.get('/orders/my-orders', getMyOrders);
 router.get('/orders/:id', getOrderById);
 router.put('/orders/:id/cancel', cancelOrder);
 router.put('/orders/:id/pay', payOrder);
+router.get('/orders/:id/qr-payment', getQRPaymentInfo);
 
 // Reviews management (customer)
 router.post('/reviews', createReview);

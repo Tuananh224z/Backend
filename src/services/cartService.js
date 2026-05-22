@@ -31,8 +31,8 @@ const addItemToCart = async (userId, productId, quantity = 1) => {
     throw new Error(`Không đủ hàng trong kho. Còn lại: ${product.stock}`);
   }
 
-  // Lấy giá sản phẩm (lấy giá khuyến mại nếu có)
-  const productPrice = product.discountPrice && product.discountPrice > 0 ? product.discountPrice : product.price;
+  // Lấy giá sản phẩm (lấy giá thường)
+  const productPrice = product.price;
 
   // 2. Tìm hoặc tạo giỏ hàng của user
   let cart = await Cart.findOne({ user: userId });
@@ -92,7 +92,7 @@ const updateCartItemQty = async (userId, productId, quantity) => {
   }
 
   // Cập nhật số lượng và giá mới nhất
-  const productPrice = product.discountPrice && product.discountPrice > 0 ? product.discountPrice : product.price;
+  const productPrice = product.price;
   cart.items[itemIndex].quantity = quantity;
   cart.items[itemIndex].price = productPrice;
 

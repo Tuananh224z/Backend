@@ -7,7 +7,7 @@ const getAllCategories = async (query = {}) => {
   const { showAll, ...rest } = query;
   const filter = { ...rest };
   if (showAll !== "true" && showAll !== true) {
-    filter.isActive = true;
+    filter.isActive = { $ne: false };
   }
   return await Category.find(filter);
 };

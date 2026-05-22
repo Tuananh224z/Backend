@@ -7,7 +7,7 @@ const getAllBrands = async (query = {}) => {
   const { showAll, ...rest } = query;
   const filter = { ...rest };
   if (showAll !== "true" && showAll !== true) {
-    filter.isActive = true;
+    filter.isActive = { $ne: false };
   }
   return await Brand.find(filter);
 };

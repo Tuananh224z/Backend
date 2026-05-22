@@ -34,11 +34,33 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       validate: {
-        validator: function (value) {
-          // discountPrice must be less than price
-          return value < this.price;
+        validator: async function (value) {
+          // A discountPrice of 0 or undefined means no discount, which is always valid
+          if (!value) return true;
+
+          let price;
+          if (this.constructor.name === "Query") {
+            // Update validator context
+            const update = this.getUpdate();
+            const set = (update && update.$set) || update;
+            if (set && set.price !== undefined) {
+              price = set.price;
+            } else {
+              // Fetch current document to get current price
+              const doc = await this.model.findOne(this.getQuery());
+              if (doc) {
+                price = doc.price;
+              }
+            }
+          } else {
+            // Document creation validator context
+            price = this.price;
+          }
+
+          if (price === undefined) return true;
+          return value > price;
         },
-        message: "Giá khuyến mại phải nhỏ hơn giá bán gốc",
+        message: "Giá cũ phải lớn hơn giá bán mới",
       },
     },
     sku: {

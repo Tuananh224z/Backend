@@ -51,7 +51,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
     let productContext = "CÁC SẢN PHẨM HIỆN CÓ TẠI CỬA HÀNG:\n";
     if (matchedProducts.length > 0) {
       matchedProducts.forEach((p, idx) => {
-        const priceStr = p.discountPrice && p.discountPrice > 0 ? `${p.discountPrice} VND (đang giảm giá, giá gốc ${p.price} VND)` : `${p.price} VND`;
+        const priceStr = p.discountPrice && p.discountPrice > 0 ? `${p.price} VND (đang giảm giá, giá cũ ${p.discountPrice} VND)` : `${p.price} VND`;
         productContext += `${idx + 1}. ${p.name} - Giá: ${priceStr}\n`;
         productContext += `   - Cấu hình: CPU ${p.specs.cpu || "N/A"}, RAM ${p.specs.ram || "N/A"}, Ổ cứng ${p.specs.storage || "N/A"}, VGA ${p.specs.vga || "N/A"}, Màn hình ${p.specs.screenSize || "N/A"}, HĐH ${p.specs.os || "N/A"}\n`;
         productContext += `   - Link xem chi tiết: /products/${p.slug}\n\n`;

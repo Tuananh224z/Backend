@@ -12,6 +12,7 @@ const { getProducts, getProductByIdOrSlug } = require('../controllers/productCon
 const { getProductReviews } = require('../controllers/reviewController');
 const { getSessionMessages } = require('../controllers/chatController');
 const { getSettings } = require('../controllers/settingController');
+const { handleCassoWebhook } = require('../controllers/paymentController');
 
 // Authentication public routes
 router.post('/auth/register', register);
@@ -37,5 +38,8 @@ router.get('/chat/sessions/:sessionId/messages', getSessionMessages);
 
 // System settings public routes
 router.get('/system/settings', getSettings);
+
+// Casso Webhook public route
+router.post('/payment/casso-webhook', handleCassoWebhook);
 
 module.exports = router;

@@ -15,20 +15,35 @@ const generateOrderCode = () => {
  * Customer: Place a new order from their current cart.
  */
 const createOrder = async (userId, orderData) => {
-  const { shippingAddress, paymentMethod, notes, couponApplied, discountAmount = 0 } = orderData;
+  const { shippingAddress, paymentMethod, notes, couponApplied, discountAmount = 0, items } = orderData;
 
-  // 1. Lấy giỏ hàng của người dùng
-  const cart = await Cart.findOne({ user: userId });
-  if (!cart || cart.items.length === 0) {
-    throw new Error("Giỏ hàng của bạn đang trống");
+  let itemsToProcess = [];
+  let cartObj = null;
+
+  if (items && items.length > 0) {
+    itemsToProcess = items.map(item => ({
+      product: item.product._id || item.product,
+      quantity: item.quantity
+    }));
+  } else {
+    // 1. Lấy giỏ hàng của người dùng từ database
+    cartObj = await Cart.findOne({ user: userId });
+    if (!cartObj || cartObj.items.length === 0) {
+      throw new Error("Giỏ hàng của bạn đang trống");
+    }
+    itemsToProcess = cartObj.items;
   }
 
   const orderItems = [];
   let subtotal = 0;
 
   // 2. Kiểm tra tồn kho và chuẩn bị dữ liệu sản phẩm
-  for (const item of cart.items) {
-    const product = await Product.findById(item.product);
+  for (const item of itemsToProcess) {
+    const productId = item.product ? (item.product._id || item.product).toString() : "";
+    if (!productId.match(/^[0-9a-fA-F]{24}$/)) {
+      throw new Error(`Mã sản phẩm "${productId}" không hợp lệ (yêu cầu định dạng ObjectId)`);
+    }
+    const product = await Product.findById(productId);
     if (!product) {
       throw new Error(`Sản phẩm với ID ${item.product} không còn tồn tại`);
     }
@@ -39,8 +54,8 @@ const createOrder = async (userId, orderData) => {
       throw new Error(`Sản phẩm "${product.name}" không đủ hàng trong kho. Còn lại: ${product.stock}`);
     }
 
-    // Giá mua thực tế (lấy giá khuyến mại hoặc giá thường tại thời điểm mua)
-    const finalPrice = product.discountPrice && product.discountPrice > 0 ? product.discountPrice : product.price;
+    // Giá mua thực tế (lấy giá thường tại thời điểm mua)
+    const finalPrice = product.price;
 
     orderItems.push({
       product: product._id,
@@ -53,7 +68,7 @@ const createOrder = async (userId, orderData) => {
   }
 
   // 3. Trừ số lượng tồn kho của các sản phẩm
-  for (const item of cart.items) {
+  for (const item of itemsToProcess) {
     await Product.findByIdAndUpdate(item.product, {
       $inc: { stock: -item.quantity },
     });
@@ -71,7 +86,7 @@ const createOrder = async (userId, orderData) => {
     items: orderItems,
     shippingAddress,
     paymentMethod,
-    paymentStatus: paymentMethod === "Online" ? "Pending" : "Pending",
+    paymentStatus: "Pending",
     orderStatus: "Pending",
     shippingFee,
     discountAmount,
@@ -81,8 +96,13 @@ const createOrder = async (userId, orderData) => {
   });
 
   // 6. Xóa giỏ hàng sau khi đặt hàng thành công
-  cart.items = [];
-  await cart.save();
+  if (cartObj) {
+    cartObj.items = [];
+    await cartObj.save();
+  } else {
+    // Xóa giỏ hàng DB nếu có
+    await Cart.findOneAndUpdate({ user: userId }, { items: [] });
+  }
 
   return newOrder;
 };
