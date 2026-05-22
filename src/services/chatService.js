@@ -2,33 +2,124 @@ const axios = require("axios");
 const Product = require("../../models/product");
 const SystemSettings = require("../../models/systemSettings");
 const ChatbotSession = require("../../models/chatbotSession");
+const Category = require("../../models/category");
+const Brand = require("../../models/brand");
 
 /**
  * Perform RAG: Retrieve relevant products, build prompt, call LLM.
  */
 const getChatbotReply = async (sessionToken, messageText) => {
   try {
-    // 1. Tìm kiếm sản phẩm liên quan trong Database (Retrieval)
+    // 1. Phân tích từ khóa tìm kiếm nâng cao (Retrieval)
     let matchedProducts = [];
+    const textLower = messageText.toLowerCase();
 
-    // Thử dùng Text Index trước để tìm kiếm thông minh
-    if (messageText && messageText.trim() !== "") {
-      matchedProducts = await Product.find(
-        { isActive: true, $text: { $search: messageText } }
-      )
+    // Phân tích khoảng giá (vd: "dưới 20tr", "dưới 20 triệu")
+    let maxPrice = null;
+    const priceRegexes = [
+      /dưới\s*(\d+(?:[.,]\d+)?)\s*(?:triệu|tr)/i,
+      /tầm\s*(\d+(?:[.,]\d+)?)\s*(?:triệu|tr)/i,
+      /khoảng\s*(\d+(?:[.,]\d+)?)\s*(?:triệu|tr)/i,
+      /dưới\s*(\d{1,3}(?:\.\d{3})+(?:\.\d{3})?)\s*(?:đ|đồng|vnd)/i,
+      /dưới\s*(\d+)\s*(?:triệu|tr|trieu)/i
+    ];
+    
+    for (const regex of priceRegexes) {
+      const match = textLower.match(regex);
+      if (match) {
+        let val = match[1].replace(/[,.]/g, "");
+        const floatVal = parseFloat(val);
+        if (regex.source.includes("triệu") || regex.source.includes("tr")) {
+          maxPrice = floatVal * 1000000;
+        } else {
+          maxPrice = floatVal;
+        }
+        break;
+      }
+    }
+
+    // Phân tích danh mục (vd: "laptop", "pc", "chuột", "bàn phím"...)
+    const categoryKeywords = {
+      "laptop": ["laptop-gaming", "laptop-van-phong", "macbook"],
+      "macbook": ["macbook"],
+      "pc": ["pc-dong-bo"],
+      "máy tính bàn": ["pc-dong-bo"],
+      "màn hình": ["man-hinh"],
+      "chuột": ["phu-kien"],
+      "bàn phím": ["phu-kien"],
+      "tai nghe": ["phu-kien"],
+      "vga": ["linh-kien-pc"],
+      "card": ["linh-kien-pc"],
+      "ram": ["linh-kien-pc"],
+      "ssd": ["linh-kien-pc"],
+    };
+
+    const matchedSlugs = [];
+    for (const [key, slugs] of Object.entries(categoryKeywords)) {
+      if (textLower.includes(key)) {
+        matchedSlugs.push(...slugs);
+      }
+    }
+
+    let categoryIds = [];
+    if (matchedSlugs.length > 0) {
+      const cats = await Category.find({ slug: { $in: matchedSlugs } }).select("_id");
+      categoryIds = cats.map(c => c._id);
+    }
+
+    // Phân tích thương hiệu (vd: "asus", "dell", "hp", "lenovo"...)
+    const brandsInDb = await Brand.find({}).select("_id name");
+    const matchedBrandIds = [];
+    for (const brand of brandsInDb) {
+      if (textLower.includes(brand.name.toLowerCase())) {
+        matchedBrandIds.push(brand._id);
+      }
+    }
+
+    // Xây dựng câu truy vấn động
+    const query = { isActive: true };
+    if (categoryIds.length > 0) {
+      query.category = { $in: categoryIds };
+    }
+    if (matchedBrandIds.length > 0) {
+      query.brand = { $in: matchedBrandIds };
+    }
+    if (maxPrice) {
+      query.price = { $lte: maxPrice };
+    }
+
+    // Thực hiện tìm kiếm nâng cao theo bộ lọc trước
+    if (categoryIds.length > 0 || matchedBrandIds.length > 0 || maxPrice) {
+      matchedProducts = await Product.find(query)
+        .select("name price discountPrice specs slug description")
+        .limit(6);
+    }
+
+    // Nếu bộ lọc không ra kết quả hoặc không có bộ lọc cụ thể, dùng Text Index
+    if (matchedProducts.length === 0 && messageText && messageText.trim() !== "") {
+      const textQuery = { isActive: true };
+      if (maxPrice) {
+        textQuery.price = { $lte: maxPrice };
+      }
+      matchedProducts = await Product.find({
+        ...textQuery,
+        $text: { $search: messageText }
+      })
         .select("name price discountPrice specs slug description")
         .limit(4);
     }
 
-    // Nếu tìm kiếm text index không ra kết quả, thử tìm theo regex tên hoặc cấu hình hoặc lấy sản phẩm nổi bật làm fallback
+    // Fallback cuối cùng nếu vẫn không có sản phẩm nào
     if (matchedProducts.length === 0) {
-      const keywords = messageText.toLowerCase();
-      // Tìm hãng hoặc từ khóa cụ thể trong tên
+      const fallbackQuery = { isActive: true };
+      if (maxPrice) {
+        fallbackQuery.price = { $lte: maxPrice };
+      }
       matchedProducts = await Product.find({
-        isActive: true,
+        ...fallbackQuery,
         $or: [
-          { name: { $regex: keywords.split(" ")[0], $options: "i" } },
-          { isFeatured: true }
+          { isFeatured: true },
+          { isBestSeller: true }
         ]
       })
         .select("name price discountPrice specs slug description")
@@ -48,7 +139,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
         2. SO SÁNH GIÁ CHUẨN XÁC: Hiểu rõ "triệu" hoặc "tr" tương đương với 1.000.000. Phải đối chiếu số tiền khách yêu cầu với "Giá trị số (VNĐ)" của từng sản phẩm. Tuyệt đối KHÔNG giới thiệu sản phẩm có "Giá trị số (VNĐ)" lớn hơn ngân sách khách yêu cầu, KỂ CẢ dưới hình thức gợi ý thêm hay phương án thay thế.
         3. CHỈ DÙNG DỮ LIỆU THẬT & ĐÚNG DANH MỤC: Chỉ được giới thiệu sản phẩm nằm trong danh sách được cung cấp dưới đây và phải khớp đúng danh mục khách yêu cầu (Ví dụ: khách hỏi "laptop" thì tuyệt đối không tư vấn "chuột" hay "vga").
         4. CẤM TUYỆT ĐỐI GIỚI THIỆU VƯỢT NGÂN SÁCH: Nếu không có sản phẩm nào thỏa mãn mức giá yêu cầu, PHẢI TRẢ LỜI THÀNH THẬT là cửa hàng hiện chưa có sản phẩm phù hợp. KHÔNG ĐƯỢC giới thiệu bất kỳ sản phẩm nào đắt hơn ngân sách của khách.
-        5. ĐỊNH DẠNG: Luôn dùng link định dạng Markdown và PHẢI KÈM THEO GIÁ SẢN PHẨM (Giá hiển thị). Ví dụ: "- [Tên sản phẩm](/product/slug): 27.990.000₫ - Mô tả ngắn...".
+        5. ĐỊNH DẠNG: Trình bày danh sách sản phẩm theo dạng danh sách gạch đầu dòng, mỗi sản phẩm viết gọn trên đúng 1 DÒNG duy nhất. Tuyệt đối không xuống dòng hay tạo các dòng phụ thụt lề cho cùng một sản phẩm. Công thức định dạng bắt buộc: "- [Tên sản phẩm](/product/slug): Giá tiền - Mô tả ngắn" (Ví dụ: "- [Laptop Lenovo IdeaPad 330S](/product/lenovo-ideapad-330s): 14.990.000₫ - Laptop thin và nhẹ, hiệu suất mạnh mẽ.").
         6. LUÔN CẢM ƠN: Ở cuối mỗi câu trả lời, luôn thêm một câu cảm ơn thân thiện gửi đến khách hàng (Ví dụ: "Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!", "Cảm ơn bạn nhé!").
         
         VÍ DỤ NẾU KHÔNG CÓ SẢN PHẨM PHÙ HỢP:
@@ -64,13 +155,25 @@ const getChatbotReply = async (sessionToken, messageText) => {
     }
 
     // 3. Xây dựng Ngữ cảnh sản phẩm (Product Context) gửi kèm Prompt
+    const formatPriceVND = (num) => {
+      if (num === null || num === undefined) return "0₫";
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "₫";
+    };
+
     let productContext = "CÁC SẢN PHẨM HIỆN CÓ TẠI CỬA HÀNG:\n";
     if (matchedProducts.length > 0) {
       matchedProducts.forEach((p, idx) => {
-        const priceStr = p.discountPrice && p.discountPrice > 0 ? `${p.price} VND (đang giảm giá, giá cũ ${p.discountPrice} VND)` : `${p.price} VND`;
-        productContext += `${idx + 1}. ${p.name} - Giá: ${priceStr}\n`;
+        const displayPrice = formatPriceVND(p.price);
+        const originalPrice = p.discountPrice && p.discountPrice > 0 ? formatPriceVND(p.discountPrice) : null;
+        
+        let priceStr = displayPrice;
+        if (originalPrice) {
+          priceStr = `${displayPrice} (đang giảm giá, giá cũ ${originalPrice})`;
+        }
+        
+        productContext += `${idx + 1}. ${p.name} - Giá trị số (VNĐ): ${p.price} (${priceStr})\n`;
         productContext += `   - Cấu hình: CPU ${p.specs.cpu || "N/A"}, RAM ${p.specs.ram || "N/A"}, Ổ cứng ${p.specs.storage || "N/A"}, VGA ${p.specs.vga || "N/A"}, Màn hình ${p.specs.screenSize || "N/A"}, HĐH ${p.specs.os || "N/A"}\n`;
-        productContext += `   - Link xem chi tiết: /products/${p.slug}\n\n`;
+        productContext += `   - Link xem chi tiết: /product/${p.slug}\n\n`;
       });
     } else {
       productContext += "(Hiện tại không có sản phẩm nào phù hợp yêu cầu trong kho)\n";
@@ -97,7 +200,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
     } else if (systemInstruction.includes("$productContext")) {
       systemInstruction = systemInstruction.replace("$productContext", productContext);
     } else {
-      systemInstruction = `${systemInstruction}\n\n${productContext}\n*Lưu ý: Chỉ tư vấn và đề xuất các sản phẩm trong danh sách trên của cửa hàng. Cung cấp đường dẫn chi tiết dạng '/products/slug' chính xác như trên. Không được tự bịa ra thông tin sản phẩm khác.`;
+      systemInstruction = `${systemInstruction}\n\n${productContext}\n*Lưu ý: Chỉ tư vấn và đề xuất các sản phẩm trong danh sách trên của cửa hàng. Cung cấp đường dẫn chi tiết dạng '/product/slug' chính xác như trên. Không được tự bịa ra thông tin sản phẩm khác.`;
     }
 
     const apiMessages = [

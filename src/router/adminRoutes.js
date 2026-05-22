@@ -14,7 +14,7 @@ const { createProduct, updateProduct, deleteProduct, uploadImages } = require('.
 const { getOrders, updateOrderStatus } = require('../controllers/orderController');
 const { getReviewsAdmin, updateReviewStatus } = require('../controllers/reviewController');
 const { getChatSessions, getPopularQuestions } = require('../controllers/chatController');
-const { getUsersAdmin, getUserDetailsAdmin, toggleUserLockAdmin, updateUserRoleAdmin } = require('../controllers/userController');
+const { getUsersAdmin, getUserDetailsAdmin, toggleUserLockAdmin, updateUserRoleAdmin, createUserAdmin } = require('../controllers/userController');
 const { updateSettings } = require('../controllers/settingController');
 const { getStatsSummary, getChatbotStats, getUserStats } = require('../controllers/statsController');
 
@@ -54,6 +54,7 @@ router.get('/chat/popular-questions', getPopularQuestions);
 
 // Users management (admin)
 router.get('/users', getUsersAdmin);
+router.post('/users', createUserAdmin);
 router.get('/users/:id', getUserDetailsAdmin);
 router.put('/users/:id/toggle-lock', toggleUserLockAdmin);
 router.put('/users/:id/role', updateUserRoleAdmin);

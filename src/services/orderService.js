@@ -104,6 +104,9 @@ const createOrder = async (userId, orderData) => {
     await Cart.findOneAndUpdate({ user: userId }, { items: [] });
   }
 
+  // Populate product details before returning
+  await newOrder.populate("items.product", "images name slug specs");
+
   return newOrder;
 };
 
@@ -111,7 +114,9 @@ const createOrder = async (userId, orderData) => {
  * Customer: Get order history.
  */
 const getCustomerOrders = async (userId) => {
-  return await Order.find({ user: userId }).sort({ createdAt: -1 });
+  return await Order.find({ user: userId })
+    .populate("items.product", "images name slug specs")
+    .sort({ createdAt: -1 });
 };
 
 /**
@@ -121,7 +126,7 @@ const getOrderDetails = async (orderId, userId = null) => {
   const query = { _id: orderId };
   if (userId) query.user = userId;
 
-  const order = await Order.findOne(query).populate("items.product", "images slug specs");
+  const order = await Order.findOne(query).populate("items.product", "images name slug specs");
   if (!order) {
     throw new Error("Không tìm thấy đơn hàng");
   }
@@ -154,6 +159,9 @@ const cancelOrder = async (orderId, userId, reason) => {
     });
   }
 
+  // Populate product details before returning
+  await order.populate("items.product", "images name slug specs");
+
   return order;
 };
 
@@ -169,6 +177,9 @@ const payOrder = async (orderId, userId, paymentDetails) => {
   order.paymentStatus = "Paid";
   order.paymentDetails = paymentDetails;
   await order.save();
+
+  // Populate product details before returning
+  await order.populate("items.product", "images name slug specs");
 
   return order;
 };
@@ -213,6 +224,10 @@ const adminUpdateOrderStatus = async (orderId, statusData) => {
   }
 
   await order.save();
+
+  // Populate product details before returning
+  await order.populate("items.product", "images name slug specs");
+
   return order;
 };
 

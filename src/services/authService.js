@@ -86,7 +86,7 @@ const getUserProfile = async (userId) => {
  * Service to update profile.
  */
 const updateUserProfile = async (userId, profileData) => {
-  const allowedUpdates = ["fullName", "phone", "avatar", "address"];
+  const allowedUpdates = ["fullName", "phone", "avatar", "address", "addresses"];
   const updates = {};
 
   // Chỉ cho phép update các trường chỉ định
@@ -95,6 +95,52 @@ const updateUserProfile = async (userId, profileData) => {
       updates[field] = profileData[field];
     }
   });
+
+  // Nếu có cập nhật danh sách địa chỉ (addresses)
+  if (updates.addresses && Array.isArray(updates.addresses)) {
+    // Đảm bảo chỉ có tối đa 1 địa chỉ mặc định
+    let defaultCount = updates.addresses.filter(addr => addr.isDefault).length;
+    
+    if (defaultCount === 0 && updates.addresses.length > 0) {
+      // Nếu không có địa chỉ nào mặc định, đặt địa chỉ đầu tiên làm mặc định
+      updates.addresses[0].isDefault = true;
+      defaultCount = 1;
+    } else if (defaultCount > 1) {
+      // Nếu có nhiều hơn 1 địa chỉ mặc định, chỉ giữ lại cái cuối cùng được set làm mặc định
+      let foundFirst = false;
+      for (let i = updates.addresses.length - 1; i >= 0; i--) {
+        if (updates.addresses[i].isDefault) {
+          if (!foundFirst) {
+            foundFirst = true;
+          } else {
+            updates.addresses[i].isDefault = false;
+          }
+        }
+      }
+    }
+
+    // Tìm địa chỉ mặc định để đồng bộ vào trường address gốc
+    const defaultAddr = updates.addresses.find(addr => addr.isDefault);
+    if (defaultAddr) {
+      updates.address = {
+        street: defaultAddr.street || "",
+        ward: defaultAddr.ward || "",
+        district: defaultAddr.district || "",
+        city: defaultAddr.city || ""
+      };
+      
+      // Đồng thời cập nhật fullName và phone gốc theo địa chỉ mặc định
+      if (profileData.fullName === undefined) {
+        updates.fullName = defaultAddr.fullName;
+      }
+      if (profileData.phone === undefined) {
+        updates.phone = defaultAddr.phone;
+      }
+    } else {
+      // Nếu xóa hết địa chỉ, reset address gốc
+      updates.address = { street: "", ward: "", district: "", city: "" };
+    }
+  }
 
   const updatedUser = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true, runValidators: true }).select("-password");
 

@@ -5,11 +5,11 @@ const rateLimit = require("express-rate-limit");
  * Tối đa 5 lần thử đăng nhập từ cùng một IP trong vòng 15 phút.
  */
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 phút
+  windowMs: 1 * 60 * 1000, // 1 phút
   max: 5, // Tối đa 5 lần yêu cầu đăng nhập từ một địa chỉ IP
   message: {
     status: "fail",
-    message: "Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau 15 phút."
+    message: "Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau 1 phút."
   },
   standardHeaders: true, // Trả về thông tin giới hạn trong headers chuẩn `RateLimit-*`
   legacyHeaders: false, // Vô hiệu hóa headers cũ `X-RateLimit-*`

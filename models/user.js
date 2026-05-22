@@ -43,6 +43,17 @@ const userSchema = new mongoose.Schema(
       district: { type: String, default: "" },
       city: { type: String, default: "" },
     },
+    addresses: [
+      {
+        fullName: { type: String, required: true },
+        phone: { type: String, required: true },
+        street: { type: String, default: "" },
+        ward: { type: String, default: "" },
+        district: { type: String, default: "" },
+        city: { type: String, default: "" },
+        isDefault: { type: Boolean, default: false },
+      }
+    ],
   },
   {
     timestamps: true,

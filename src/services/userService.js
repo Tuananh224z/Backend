@@ -27,13 +27,13 @@ const toggleUserLockAdmin = async (userId) => {
     throw new Error("Không tìm thấy người dùng");
   }
 
-  // Khóa hoặc Mở khóa
-  user.isActive = !user.isActive;
-  await user.save();
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { isActive: !user.isActive },
+    { new: true, runValidators: true }
+  ).select("-password");
 
-  const userResponse = user.toObject();
-  delete userResponse.password;
-  return userResponse;
+  return updatedUser;
 };
 
 /**
@@ -44,16 +44,64 @@ const updateUserRoleAdmin = async (userId, role) => {
     throw new Error("Vai trò không hợp lệ");
   }
 
-  const user = await User.findById(userId);
-  if (!user) {
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { role },
+    { new: true, runValidators: true }
+  ).select("-password");
+
+  if (!updatedUser) {
     throw new Error("Không tìm thấy người dùng");
   }
 
-  user.role = role;
-  await user.save();
+  return updatedUser;
+};
 
-  const userResponse = user.toObject();
+/**
+ * Admin: Create a new user (admin or customer).
+ */
+const createUserAdmin = async (userData) => {
+  const { email, password, fullName, phone, role, address } = userData;
+
+  if (!email || !password || !fullName) {
+    throw new Error("Vui lòng điền đầy đủ các trường bắt buộc (Email, Mật khẩu, Họ tên)");
+  }
+
+  // 1. Kiểm tra email tồn tại
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    throw new Error("Email đã được sử dụng bởi tài khoản khác");
+  }
+
+  const bcrypt = require("bcryptjs");
+  const Cart = require("../../models/cart");
+
+  // 2. Mã hóa mật khẩu
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  // 3. Tạo User mới
+  const newUser = await User.create({
+    email,
+    password: hashedPassword,
+    fullName,
+    phone: phone || "",
+    role: role || "customer",
+    address: {
+      street: address?.street || "",
+      ward: address?.ward || "",
+      district: address?.district || "",
+      city: address?.city || "",
+    },
+  });
+
+  // 4. Tạo giỏ hàng trống cho User mới
+  await Cart.create({ user: newUser._id, items: [] });
+
+  // Ẩn mật khẩu khi trả về
+  const userResponse = newUser.toObject();
   delete userResponse.password;
+
   return userResponse;
 };
 
@@ -62,4 +110,5 @@ module.exports = {
   getUserDetailsAdmin,
   toggleUserLockAdmin,
   updateUserRoleAdmin,
+  createUserAdmin,
 };

@@ -70,9 +70,25 @@ const updateUserRoleAdmin = async (req, res) => {
   }
 };
 
+const createUserAdmin = async (req, res) => {
+  try {
+    const user = await userService.createUserAdmin(req.body);
+    res.status(201).json({
+      status: "success",
+      data: user,
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: "fail",
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   getUsersAdmin,
   getUserDetailsAdmin,
   toggleUserLockAdmin,
   updateUserRoleAdmin,
+  createUserAdmin,
 };
