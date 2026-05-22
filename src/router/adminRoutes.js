@@ -12,7 +12,7 @@ const { createCategory, updateCategory, deleteCategory } = require('../controlle
 const { createProduct, updateProduct, deleteProduct, uploadImages } = require('../controllers/productController');
 
 const { getOrders, updateOrderStatus } = require('../controllers/orderController');
-const { getReviewsAdmin, updateReviewStatus } = require('../controllers/reviewController');
+const { getReviewsAdmin, updateReviewStatus, replyReviewAdmin } = require('../controllers/reviewController');
 const { getChatSessions, getPopularQuestions } = require('../controllers/chatController');
 const { getUsersAdmin, getUserDetailsAdmin, toggleUserLockAdmin, updateUserRoleAdmin, createUserAdmin } = require('../controllers/userController');
 const { updateSettings } = require('../controllers/settingController');
@@ -47,6 +47,7 @@ router.put('/orders/:id/status', updateOrderStatus);
 // Reviews management (admin)
 router.get('/reviews', getReviewsAdmin);
 router.put('/reviews/:id/status', updateReviewStatus);
+router.put('/reviews/:id/reply', replyReviewAdmin);
 
 // Chatbot session monitoring
 router.get('/chat/sessions', getChatSessions);

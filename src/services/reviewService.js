@@ -74,10 +74,28 @@ const adminUpdateReviewStatus = async (reviewId, isActive) => {
   return updatedReview;
 };
 
+/**
+ * Admin: Reply to a review.
+ */
+const adminReplyReview = async (reviewId, adminReply) => {
+  const updatedReview = await Review.findOneAndUpdate(
+    { _id: reviewId },
+    { $set: { adminReply, adminRepliedAt: new Date() } },
+    { new: true }
+  );
+
+  if (!updatedReview) {
+    throw new Error("Không tìm thấy đánh giá cần phản hồi");
+  }
+
+  return updatedReview;
+};
+
 module.exports = {
   getProductReviews,
   createProductReview,
   deleteProductReview,
   adminGetReviews,
   adminUpdateReviewStatus,
+  adminReplyReview,
 };

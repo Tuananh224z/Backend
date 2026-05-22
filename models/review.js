@@ -27,6 +27,13 @@ const reviewSchema = new mongoose.Schema(
       type: Boolean,
       default: true, // Cho phép Admin ẩn bình luận vi phạm
     },
+    adminReply: {
+      type: String,
+      trim: true,
+    },
+    adminRepliedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

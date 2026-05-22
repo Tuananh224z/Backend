@@ -87,10 +87,34 @@ const updateReviewStatus = async (req, res) => {
   }
 };
 
+const replyReviewAdmin = async (req, res) => {
+  try {
+    const { adminReply } = req.body;
+    if (adminReply === undefined || adminReply.trim() === "") {
+      return res.status(400).json({
+        status: "fail",
+        message: "Nội dung phản hồi không được bỏ trống",
+      });
+    }
+    const review = await reviewService.adminReplyReview(req.params.id, adminReply);
+    res.status(200).json({
+      status: "success",
+      message: "Phản hồi đánh giá thành công",
+      data: review,
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: "fail",
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   getProductReviews,
   createReview,
   deleteReview,
   getReviewsAdmin,
   updateReviewStatus,
+  replyReviewAdmin,
 };
