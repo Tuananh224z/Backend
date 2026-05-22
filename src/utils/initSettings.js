@@ -1,33 +1,8 @@
-const mongoose = require("mongoose");
+const SystemSettings = require("../../models/systemSettings");
 
-const systemSettingsSchema = new mongoose.Schema(
-  {
-    logo: {
-      type: String,
-      default: "",
-    },
-    banners: {
-      type: [String],
-      default: [],
-    },
-    contactInfo: {
-      address: { type: String, default: "" },
-      phone: { type: String, default: "" },
-      email: { type: String, default: "" },
-      socialLinks: {
-        facebook: { type: String, default: "" },
-        instagram: { type: String, default: "" },
-        youtube: { type: String, default: "" },
-      },
-    },
-    chatbotConfig: {
-      model: {
-        type: String,
-        default: "llama-3.1-8b-instant",
-      },
-      systemPrompt: {
-        type: String,
-        default: `Bạn là Trợ lý Bán hàng của TechStore.
+const initSystemSettings = async () => {
+  try {
+    const defaultPrompt = `Bạn là Trợ lý Bán hàng của TechStore.
         
         NGUYÊN TẮC VÀNG:
         1. TRẢ LỜI ĐÚNG TRỌNG TÂM: Không dài dòng, không giải thích lý thuyết. Khách hỏi gì đáp nấy.
@@ -42,27 +17,64 @@ const systemSettingsSchema = new mongoose.Schema(
         AI: "Xin lỗi bạn, hiện tại TechStore chưa có mẫu chuột nào có mức giá dưới 100.000₫ phù hợp với yêu cầu của bạn ạ! Bạn có thể cân nhắc nâng thêm ngân sách hoặc theo dõi thêm cửa hàng để cập nhật các mẫu mới nhé. Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!"
 
         DANH SÁCH SẢN PHẨM TRONG KHO:
-        \${productContext}`,
-      },
-      temperature: {
-        type: Number,
-        default: 0.7,
-        min: 0,
-        max: 2,
-      },
-      maxTokens: {
-        type: Number,
-        default: 500,
-      },
-    },
-    updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
+        \${productContext}`;
 
-module.exports = mongoose.model("SystemSettings", systemSettingsSchema);
+    let settings = await SystemSettings.findOne();
+    if (!settings) {
+      settings = await SystemSettings.create({
+        logo: "",
+        banners: [],
+        contactInfo: {
+          address: "123 Đường Laptop, Hà Nội",
+          phone: "0123456789",
+          email: "contact@laptopshop.com",
+        },
+        chatbotConfig: {
+          model: "llama-3.1-8b-instant",
+          systemPrompt: defaultPrompt,
+          temperature: 0.7,
+          maxTokens: 500,
+        },
+      });
+      console.log(">> Đã khởi tạo cấu hình hệ thống mặc định thành công.");
+    } else {
+      // Cập nhật cấu hình chatbot với Prompt và Model mới nếu chưa khớp
+      let isUpdated = false;
+      
+      if (!settings.chatbotConfig) {
+        settings.chatbotConfig = {
+          model: "llama-3.1-8b-instant",
+          systemPrompt: defaultPrompt,
+          temperature: 0.7,
+          maxTokens: 500,
+        };
+        isUpdated = true;
+      } else {
+        if (!settings.chatbotConfig.model || settings.chatbotConfig.model === "llama3-8b-8192") {
+          settings.chatbotConfig.model = "llama-3.1-8b-instant";
+          isUpdated = true;
+        }
+        
+        // Cập nhật prompt sang Nguyên Tắc Vàng của người dùng
+        if (
+          !settings.chatbotConfig.systemPrompt ||
+          !settings.chatbotConfig.systemPrompt.includes("NGUYÊN TẮC VÀNG")
+        ) {
+          settings.chatbotConfig.systemPrompt = defaultPrompt;
+          isUpdated = true;
+        }
+      }
+
+      if (isUpdated) {
+        await SystemSettings.findByIdAndUpdate(settings._id, {
+          $set: { chatbotConfig: settings.chatbotConfig },
+        });
+        console.log(">> Đã cập nhật cấu hình chatbot hệ thống theo Nguyên Tắc Vàng mới.");
+      }
+    }
+  } catch (error) {
+    console.error("Lỗi khi khởi tạo cấu hình hệ thống:", error.message);
+  }
+};
+
+module.exports = initSystemSettings;

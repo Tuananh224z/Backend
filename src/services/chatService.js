@@ -10,14 +10,14 @@ const getChatbotReply = async (sessionToken, messageText) => {
   try {
     // 1. Tìm kiếm sản phẩm liên quan trong Database (Retrieval)
     let matchedProducts = [];
-    
+
     // Thử dùng Text Index trước để tìm kiếm thông minh
     if (messageText && messageText.trim() !== "") {
       matchedProducts = await Product.find(
         { isActive: true, $text: { $search: messageText } }
       )
-      .select("name price discountPrice specs slug description")
-      .limit(4);
+        .select("name price discountPrice specs slug description")
+        .limit(4);
     }
 
     // Nếu tìm kiếm text index không ra kết quả, thử tìm theo regex tên hoặc cấu hình hoặc lấy sản phẩm nổi bật làm fallback
@@ -31,8 +31,8 @@ const getChatbotReply = async (sessionToken, messageText) => {
           { isFeatured: true }
         ]
       })
-      .select("name price discountPrice specs slug description")
-      .limit(4);
+        .select("name price discountPrice specs slug description")
+        .limit(4);
     }
 
     // 2. Lấy cấu hình hệ thống & System Prompt
@@ -40,8 +40,24 @@ const getChatbotReply = async (sessionToken, messageText) => {
     if (!settings) {
       settings = {
         chatbotConfig: {
-          systemPrompt: "Bạn là nhân viên tư vấn laptop chuyên nghiệp. Hãy dùng các thông tin sản phẩm có sẵn ở cửa hàng để hỗ trợ khách hàng.",
-          temperature: 0.7,
+          model: "llama-3.1-8b-instant",
+          systemPrompt: `Bạn là Trợ lý Bán hàng của TechStore.
+        
+        NGUYÊN TẮC VÀNG:
+        1. TRẢ LỜI ĐÚNG TRỌNG TÂM: Không dài dòng, không giải thích lý thuyết. Khách hỏi gì đáp nấy.
+        2. SO SÁNH GIÁ CHUẨN XÁC: Hiểu rõ "triệu" hoặc "tr" tương đương với 1.000.000. Phải đối chiếu số tiền khách yêu cầu với "Giá trị số (VNĐ)" của từng sản phẩm. Tuyệt đối KHÔNG giới thiệu sản phẩm có "Giá trị số (VNĐ)" lớn hơn ngân sách khách yêu cầu, KỂ CẢ dưới hình thức gợi ý thêm hay phương án thay thế.
+        3. CHỈ DÙNG DỮ LIỆU THẬT & ĐÚNG DANH MỤC: Chỉ được giới thiệu sản phẩm nằm trong danh sách được cung cấp dưới đây và phải khớp đúng danh mục khách yêu cầu (Ví dụ: khách hỏi "laptop" thì tuyệt đối không tư vấn "chuột" hay "vga").
+        4. CẤM TUYỆT ĐỐI GIỚI THIỆU VƯỢT NGÂN SÁCH: Nếu không có sản phẩm nào thỏa mãn mức giá yêu cầu, PHẢI TRẢ LỜI THÀNH THẬT là cửa hàng hiện chưa có sản phẩm phù hợp. KHÔNG ĐƯỢC giới thiệu bất kỳ sản phẩm nào đắt hơn ngân sách của khách.
+        5. ĐỊNH DẠNG: Luôn dùng link định dạng Markdown và PHẢI KÈM THEO GIÁ SẢN PHẨM (Giá hiển thị). Ví dụ: "- [Tên sản phẩm](/product/slug): 27.990.000₫ - Mô tả ngắn...".
+        6. LUÔN CẢM ƠN: Ở cuối mỗi câu trả lời, luôn thêm một câu cảm ơn thân thiện gửi đến khách hàng (Ví dụ: "Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!", "Cảm ơn bạn nhé!").
+        
+        VÍ DỤ NẾU KHÔNG CÓ SẢN PHẨM PHÙ HỢP:
+        Khách: "Tư vấn chuột dưới 100 nghìn" (trong kho chỉ có chuột 2.390.000₫)
+        AI: "Xin lỗi bạn, hiện tại TechStore chưa có mẫu chuột nào có mức giá dưới 100.000₫ phù hợp với yêu cầu của bạn ạ! Bạn có thể cân nhắc nâng thêm ngân sách hoặc theo dõi thêm cửa hàng để cập nhật các mẫu mới nhé. Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!"
+
+        DANH SÁCH SẢN PHẨM TRONG KHO:
+        \${productContext}`,
+          temperature: 0,
           maxTokens: 500
         }
       };
@@ -75,7 +91,14 @@ const getChatbotReply = async (sessionToken, messageText) => {
     }
 
     // 5. Chuẩn bị danh sách tin nhắn gửi sang Groq API
-    const systemInstruction = `${settings.chatbotConfig.systemPrompt}\n\n${productContext}\n*Lưu ý: Chỉ tư vấn và đề xuất các sản phẩm trong danh sách trên của cửa hàng. Cung cấp đường dẫn chi tiết dạng '/products/slug' chính xác như trên. Không được tự bịa ra thông tin sản phẩm khác.`;
+    let systemInstruction = settings.chatbotConfig.systemPrompt || "";
+    if (systemInstruction.includes("${productContext}")) {
+      systemInstruction = systemInstruction.replace("${productContext}", productContext);
+    } else if (systemInstruction.includes("$productContext")) {
+      systemInstruction = systemInstruction.replace("$productContext", productContext);
+    } else {
+      systemInstruction = `${systemInstruction}\n\n${productContext}\n*Lưu ý: Chỉ tư vấn và đề xuất các sản phẩm trong danh sách trên của cửa hàng. Cung cấp đường dẫn chi tiết dạng '/products/slug' chính xác như trên. Không được tự bịa ra thông tin sản phẩm khác.`;
+    }
 
     const apiMessages = [
       { role: "system", content: systemInstruction },
@@ -83,7 +106,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
       { role: "user", content: messageText }
     ];
 
-    // 6. Gọi Groq API (sử dụng Model Llama 3)
+    // 6. Gọi Groq API
     const apiKey = (process.env.GROQ_API_KEY || "").trim();
     const apiUrl = (process.env.GROQ_URL || "https://api.groq.com/openai/v1").trim();
 
@@ -91,10 +114,12 @@ const getChatbotReply = async (sessionToken, messageText) => {
       throw new Error("GROQ_API_KEY chưa được cấu hình trong file .env");
     }
 
+    const modelName = settings.chatbotConfig.model || "llama-3.1-8b-instant";
+
     const response = await axios.post(
       `${apiUrl}/chat/completions`,
       {
-        model: "llama3-8b-8192", // Model hiệu năng cao và phản hồi nhanh trên Groq
+        model: modelName,
         messages: apiMessages,
         temperature: settings.chatbotConfig.temperature,
         max_tokens: settings.chatbotConfig.maxTokens,
@@ -117,7 +142,15 @@ const getChatbotReply = async (sessionToken, messageText) => {
       suggestedProducts: suggestedProductIds,
     };
   } catch (error) {
-    console.error("Lỗi khi kết nối với Chatbot LLM:", error.message);
+    if (error.response) {
+      console.error(
+        "Lỗi từ Groq API:",
+        error.response.status,
+        JSON.stringify(error.response.data, null, 2)
+      );
+    } else {
+      console.error("Lỗi khi kết nối với Chatbot LLM:", error.message);
+    }
     // Fallback trả lời nếu Groq API gặp sự cố
     return {
       reply: "Xin lỗi bạn, chatbot của hệ thống đang bận xử lý hoặc gặp sự cố kết nối. Bạn vui lòng thử lại sau giây lát!",
@@ -152,7 +185,7 @@ const getChatSessions = async () => {
 const getPopularQuestions = async () => {
   // Aggregate tất cả tin nhắn của người dùng để tìm các cụm từ phổ biến
   const sessions = await ChatbotSession.find().select("messages");
-  
+
   const questionCounts = {};
   sessions.forEach((s) => {
     s.messages.forEach((msg) => {

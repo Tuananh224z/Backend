@@ -39,6 +39,10 @@ require("./models/systemSettings");
 
 console.log("Đã tải thành công toàn bộ Mongoose Models!");
 
+// Khởi tạo các cấu hình hệ thống mặc định (Chatbot prompt, model...)
+const initSystemSettings = require("./src/utils/initSettings");
+initSystemSettings();
+
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
