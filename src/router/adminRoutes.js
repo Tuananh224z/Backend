@@ -57,7 +57,6 @@ router.get('/chat/popular-questions', getPopularQuestions);
 router.get('/users', getUsersAdmin);
 router.post('/users', createUserAdmin);
 router.get('/users/:id', getUserDetailsAdmin);
-router.put('/users/:id/toggle-lock', toggleUserLockAdmin);
 router.put('/users/:id/role', updateUserRoleAdmin);
 
 // System settings & Dashboard statistics

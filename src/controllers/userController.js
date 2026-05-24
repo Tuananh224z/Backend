@@ -31,21 +31,6 @@ const getUserDetailsAdmin = async (req, res) => {
   }
 };
 
-const toggleUserLockAdmin = async (req, res) => {
-  try {
-    const user = await userService.toggleUserLockAdmin(req.params.id);
-    res.status(200).json({
-      status: "success",
-      message: user.isActive ? "Mở khóa người dùng thành công" : "Khóa người dùng thành công",
-      data: user,
-    });
-  } catch (error) {
-    res.status(400).json({
-      status: "fail",
-      message: error.message,
-    });
-  }
-};
 
 const updateUserRoleAdmin = async (req, res) => {
   try {
@@ -88,7 +73,6 @@ const createUserAdmin = async (req, res) => {
 module.exports = {
   getUsersAdmin,
   getUserDetailsAdmin,
-  toggleUserLockAdmin,
   updateUserRoleAdmin,
   createUserAdmin,
 };
