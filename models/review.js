@@ -79,9 +79,10 @@ reviewSchema.post("save", function () {
 });
 
 // Trước khi thực hiện update/delete đánh giá, lưu thông tin review hiện tại để lấy ID sản phẩm
-reviewSchema.pre(/^findOneAnd/, async function (next) {
+// Lưu ý: Mongoose 7+ không truyền callback `next` cho async middleware,
+// async function tự động chờ resolve nên không cần gọi next().
+reviewSchema.pre(/^findOneAnd/, async function () {
   this.r = await this.model.findOne(this.getQuery());
-  next();
 });
 
 // Gọi sau khi update/delete đánh giá hoàn tất
