@@ -12,28 +12,13 @@ const getQRPaymentInfo = async (orderId, userId) => {
     throw new Error('Không tìm thấy đơn hàng hoặc bạn không có quyền sở hữu đơn hàng này');
   }
 
-  const bankId = process.env.SHOP_BANK_ID || '970422';
+  const bankId = process.env.SHOP_BANK_ID || 'OCB';
   const accountNo = process.env.SHOP_BANK_ACCOUNT || '0342055095';
   const accountName = process.env.SHOP_BANK_NAME || 'CAO XUAN TUAN ANH';
   const amount = order.totalAmount;
 
-  // Rút gọn mã đơn hàng viết liền (ví dụ: ORD149660091107)
-  const cleanOrderCode = order.orderCode.replace(/-/g, '');
-
-  // Lấy 6 ký tự cuối của ID người dùng viết hoa
-  const shortUserId = userId.toString().slice(-6).toUpperCase();
-
-  // Tính tổng số lượng sản phẩm trong đơn hàng
-  const totalQty = order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
-
-  // Lấy thời gian tạo đơn hàng định dạng HHMM
-  const orderDate = new Date(order.createdAt || Date.now());
-  const hh = String(orderDate.getHours()).padStart(2, '0');
-  const mm = String(orderDate.getMinutes()).padStart(2, '0');
-  const timeStr = `${hh}${mm}`;
-
-  // Tạo nội dung chuyển khoản động, ngắn gọn
-  const addInfo = `${cleanOrderCode} U${shortUserId} Q${totalQty} T${timeStr}`;
+  // Tạo nội dung chuyển khoản động cực kỳ ngắn gọn dạng TS-DDMMHHMMXX (ví dụ: TS-2605102306)
+  const addInfo = order.orderCode;
 
   // Tạo URL mã QR động từ VietQR sử dụng template compact (Napas 247 + Logo ngân hàng)
   const qrCodeUrl = `https://img.vietqr.io/image/${bankId}-${accountNo}-compact.png?amount=${amount}&addInfo=${encodeURIComponent(addInfo)}&accountName=${encodeURIComponent(accountName)}`;
@@ -80,10 +65,10 @@ const processCassoWebhook = async (headers, body) => {
     // Loại bỏ dấu gạch ngang và khoảng trắng để chuẩn hóa chuỗi mô tả chuyển khoản
     const cleanDesc = (description || '').replace(/[\s-]/g, '');
 
-    // Tìm mã đơn hàng có dạng ORDxxxxxxxxxxxx (12 số đi sau ORD) và chuyển đổi thành dạng chuẩn ORD-xxxxxxxx-xxxx
-    const match = cleanDesc.match(/(ORD)(\d{8})(\d{4})/i);
+    // Tìm mã đơn hàng có dạng TSxxxxxxxxxx (10 số đi sau TS) và chuyển đổi thành dạng chuẩn TS-xxxxxxxxxx
+    const match = cleanDesc.match(/(TS)(\d{10})/i);
     if (match) {
-      const orderCode = `ORD-${match[2]}-${match[3]}`.toUpperCase();
+      const orderCode = `TS-${match[2]}`.toUpperCase();
 
       // Tìm đơn hàng trong cơ sở dữ liệu
       const order = await Order.findOne({ orderCode });
@@ -118,34 +103,30 @@ const syncCassoTransactions = async () => {
     return { success: true, message: 'Cooldown active' };
   }
 
-  const apiKey = process.env.CASSO_API_KEY;
-  if (!apiKey) {
-    return { success: false, message: 'No API Key found' };
+  const sheetUrl = process.env.GOOGLE_SHEET_URL;
+  if (!sheetUrl) {
+    return { success: false, message: 'No Google Sheet URL found' };
   }
 
   try {
-    const response = await axios.get('https://oauth.casso.vn/v2/transactions', {
-      headers: {
-        'Authorization': `Apikey ${apiKey}`
-      },
-      params: {
-        pageSize: 20,
-        sort: 'DESC'
-      }
-    });
+    const response = await axios.get(sheetUrl);
 
     if (response.data && response.data.data) {
-      const dataPayload = response.data.data;
-      const transactions = Array.isArray(dataPayload) ? dataPayload : (dataPayload.records || []);
+      const transactions = response.data.data;
 
       let matchedCount = 0;
       for (const transaction of transactions) {
-        const { description, amount, tid, when } = transaction;
+        // Ánh xạ dữ liệu cột tiếng Việt từ Google Sheet trả về qua doGet
+        const description = transaction["Mô tả"] || "";
+        const amount = parseFloat(transaction["Giá trị"]) || 0;
+        const tid = transaction["Mã GD"] || "";
+        const when = transaction["Ngày diễn ra"] || "";
+
         const cleanDesc = (description || '').replace(/[\s-]/g, '');
-        const match = cleanDesc.match(/(ORD)(\d{8})(\d{4})/i);
+        const match = cleanDesc.match(/(TS)(\d{10})/i);
 
         if (match) {
-          const orderCode = `ORD-${match[2]}-${match[3]}`.toUpperCase();
+          const orderCode = `TS-${match[2]}`.toUpperCase();
           const order = await Order.findOne({ orderCode });
 
           if (order && order.paymentStatus !== 'Paid') {
@@ -153,7 +134,7 @@ const syncCassoTransactions = async () => {
               order.paymentStatus = 'Paid';
               order.orderStatus = 'Confirmed';
               order.paymentDetails = {
-                gateway: 'CassoAPI',
+                gateway: 'GoogleSheet',
                 transactionId: tid,
                 amountReceived: amount,
                 paymentDate: when,

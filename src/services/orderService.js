@@ -6,9 +6,13 @@ const Product = require("../../models/product");
  * Helper to generate a unique order code.
  */
 const generateOrderCode = () => {
-  const timestamp = Date.now().toString().slice(-8); // Lấy 8 số cuối của timestamp
-  const random = Math.floor(1000 + Math.random() * 9000); // 4 số ngẫu nhiên
-  return `ORD-${timestamp}-${random}`;
+  const date = new Date();
+  const DD = String(date.getDate()).padStart(2, '0');
+  const MM = String(date.getMonth() + 1).padStart(2, '0');
+  const HH = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  const random = Math.floor(10 + Math.random() * 90); // 2 số ngẫu nhiên
+  return `TS-${DD}${MM}${HH}${mm}${random}`;
 };
 
 /**
