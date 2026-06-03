@@ -212,6 +212,96 @@ const sendPaymentSuccessEmail = async (order) => {
   }
 };
 
+/**
+ * Gửi email yêu cầu đặt lại mật khẩu cho khách hàng
+ * @param {string} userEmail Email người nhận
+ * @param {string} fullName Tên người nhận
+ * @param {string} resetUrl Liên kết đặt lại mật khẩu
+ */
+const sendResetPasswordEmail = async (userEmail, fullName, resetUrl) => {
+  try {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Khôi phục mật khẩu - TechStore</title>
+      </head>
+      <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f7fafc; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+        <div style="max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+          
+          <!-- Header Accent Gradient -->
+          <div style="background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%); padding: 35px 20px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">
+              Khôi Phục Mật Khẩu
+            </h1>
+            <p style="color: #fff5f5; margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">
+              Yêu cầu đặt lại mật khẩu tài khoản TechStore
+            </p>
+          </div>
+
+          <div style="padding: 30px 25px;">
+            <p style="font-size: 16px; color: #2d3748; line-height: 1.6; margin-top: 0;">
+              Chào <strong>${fullName}</strong>,
+            </p>
+            <p style="font-size: 15px; color: #4a5568; line-height: 1.6; margin-bottom: 25px;">
+              Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản liên kết với địa chỉ email của bạn. Vui lòng bấm vào nút bên dưới để tiến hành khôi phục mật khẩu mới:
+            </p>
+
+            <!-- Button khôi phục -->
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${resetUrl}" style="background-color: #e53e3e; color: #ffffff; text-decoration: none; padding: 12px 30px; font-size: 16px; font-weight: 700; border-radius: 8px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(229, 62, 62, 0.2);">
+                Đặt Lại Mật Khẩu
+              </a>
+            </div>
+
+            <p style="font-size: 14px; color: #e53e3e; font-weight: 600; line-height: 1.6;">
+              Lưu ý quan trọng:
+            </p>
+            <ul style="font-size: 14px; color: #4a5568; line-height: 1.6; padding-left: 20px; margin-top: 5px;">
+              <li>Liên kết này chỉ có hiệu lực trong vòng <strong>10 phút</strong> kể từ khi email này được gửi.</li>
+              <li>Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email và mật khẩu của bạn vẫn sẽ được giữ an toàn.</li>
+            </ul>
+
+            <div style="border-top: 1px solid #edf2f7; margin-top: 30px; padding-top: 20px;">
+              <p style="font-size: 13px; color: #718096; line-height: 1.5; margin: 0;">
+                Nếu nút bấm ở trên không hoạt động, bạn có thể copy và dán đường dẫn dưới đây vào trình duyệt:
+              </p>
+              <p style="font-size: 13px; color: #3182ce; word-break: break-all; margin: 8px 0 0 0; font-family: monospace;">
+                <a href="${resetUrl}" style="color: #3182ce; text-decoration: underline;">${resetUrl}</a>
+              </p>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div style="background-color: #f7fafc; border-top: 1px solid #edf2f7; padding: 20px; text-align: center; font-size: 12px; color: #a0aec0; line-height: 1.5;">
+            <p style="margin: 0 0 8px 0;">Đây là email tự động từ hệ thống TechStore, vui lòng không trả lời trực tiếp email này.</p>
+            <p style="margin: 0;">Nếu cần hỗ trợ gấp, vui lòng liên hệ hotline <strong>034 205 5095</strong> hoặc email <strong>support@techstore.vn</strong>.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const mailOptions = {
+      from: process.env.EMAIL_FROM || `"TechStore" <${process.env.EMAIL_USER}>`,
+      to: userEmail,
+      subject: `[TechStore] Yêu cầu khôi phục mật khẩu tài khoản`,
+      html: htmlContent
+    };
+
+    console.log(`[EmailService] Đang gửi email khôi phục mật khẩu tới ${userEmail}...`);
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[EmailService] Email khôi phục mật khẩu đã gửi thành công! MessageId: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('[EmailService] Lỗi gửi email khôi phục mật khẩu:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
-  sendPaymentSuccessEmail
+  sendPaymentSuccessEmail,
+  sendResetPasswordEmail
 };

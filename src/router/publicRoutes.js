@@ -5,7 +5,7 @@ const router = express.Router();
 const loginLimiter = require('../middleware/loginLimiter');
 
 // Controllers
-const { register, login } = require('../controllers/authController');
+const { register, login, forgotPassword, resetPassword } = require('../controllers/authController');
 const { getBrands, getBrandByIdOrSlug } = require('../controllers/brandController');
 const { getCategories, getCategoryByIdOrSlug } = require('../controllers/categoryController');
 const { getProducts, getProductByIdOrSlug } = require('../controllers/productController');
@@ -17,6 +17,8 @@ const { handleCassoWebhook } = require('../controllers/paymentController');
 // Authentication public routes
 router.post('/auth/register', register);
 router.post('/auth/login', loginLimiter, login);
+router.post('/auth/forgot-password', forgotPassword);
+router.post('/auth/reset-password', resetPassword);
 
 // Brands public routes
 router.get('/brands', getBrands);

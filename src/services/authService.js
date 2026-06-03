@@ -2,6 +2,8 @@ const User = require("../../models/user");
 const Cart = require("../../models/cart");
 const bcrypt = require("bcryptjs");
 const { signToken } = require("../utils/token");
+const jwt = require("jsonwebtoken");
+const emailService = require("./emailService");
 
 /**
  * Service to handle registration logic.
@@ -174,10 +176,74 @@ const changeUserPassword = async (userId, oldPassword, newPassword) => {
   return { message: "Đổi mật khẩu thành công" };
 };
 
+/**
+ * Service to request password reset token using JWT.
+ */
+const forgotPassword = async (email) => {
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new Error("Không tìm thấy người dùng với địa chỉ email này");
+  }
+
+  // Khóa bí mật động kết hợp JWT_SECRET và mật khẩu cũ của user (đã được bcrypt hash)
+  const secret = (process.env.JWT_SECRET || "supersecretkeydoancomputer2026") + user.password;
+
+  // Tạo JWT chứa id và email của user, hạn sử dụng 10 phút
+  const resetToken = jwt.sign(
+    { id: user._id, email: user.email },
+    secret,
+    { expiresIn: "10m" }
+  );
+
+  // Tạo đường dẫn đổi mật khẩu ở Client (Frontend)
+  const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+  const resetUrl = `${clientUrl}/reset-password?token=${resetToken}`;
+
+  // Gửi email
+  await emailService.sendResetPasswordEmail(user.email, user.fullName || "Quý khách", resetUrl);
+
+  return { message: "Liên kết đặt lại mật khẩu đã được gửi đến email" };
+};
+
+/**
+ * Service to reset password using JWT.
+ */
+const resetPassword = async (token, newPassword) => {
+  // 1. Giải mã token (không verify trước) để lấy userId
+  const decoded = jwt.decode(token);
+  if (!decoded || !decoded.id) {
+    throw new Error("Liên kết đặt lại mật khẩu không hợp lệ");
+  }
+
+  // 2. Tìm user trong DB để lấy password hash hiện tại
+  const user = await User.findById(decoded.id);
+  if (!user) {
+    throw new Error("Người dùng không tồn tại");
+  }
+
+  // 3. Verify token bằng khóa bí mật động (JWT_SECRET + user.password)
+  const secret = (process.env.JWT_SECRET || "supersecretkeydoancomputer2026") + user.password;
+  try {
+    jwt.verify(token, secret);
+  } catch (error) {
+    throw new Error("Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn");
+  }
+
+  // 4. Mã hóa mật khẩu mới và lưu
+  const salt = await bcrypt.genSalt(10);
+  user.password = await bcrypt.hash(newPassword, salt);
+
+  await user.save();
+
+  return { message: "Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại." };
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getUserProfile,
   updateUserProfile,
   changeUserPassword,
+  forgotPassword,
+  resetPassword,
 };
