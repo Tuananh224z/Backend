@@ -1,5 +1,6 @@
 const Order = require('../../models/order');
 const axios = require('axios');
+const emailService = require('./emailService');
 
 /**
  * Lấy thông tin thanh toán QR cho đơn hàng của người dùng
@@ -71,7 +72,7 @@ const processCassoWebhook = async (headers, body) => {
       const orderCode = `TS-${match[2]}`.toUpperCase();
 
       // Tìm đơn hàng trong cơ sở dữ liệu
-      const order = await Order.findOne({ orderCode });
+      const order = await Order.findOne({ orderCode }).populate('user');
       if (order && order.paymentStatus !== 'Paid') {
         // Đối chiếu số tiền chuyển khoản xem có đủ để thanh toán cho đơn hàng không
         if (amount >= order.totalAmount) {
@@ -85,6 +86,11 @@ const processCassoWebhook = async (headers, body) => {
             rawDescription: description
           };
           await order.save();
+          
+          // Gửi email xác nhận thanh toán (không chặn luồng webhook)
+          emailService.sendPaymentSuccessEmail(order).catch(err => {
+            console.error('Lỗi khi gửi email xác nhận thanh toán (Casso):', err);
+          });
         }
       }
     }
@@ -127,7 +133,7 @@ const syncCassoTransactions = async () => {
 
         if (match) {
           const orderCode = `TS-${match[2]}`.toUpperCase();
-          const order = await Order.findOne({ orderCode });
+          const order = await Order.findOne({ orderCode }).populate('user');
 
           if (order && order.paymentStatus !== 'Paid') {
             if (amount >= order.totalAmount) {
@@ -141,6 +147,12 @@ const syncCassoTransactions = async () => {
                 rawDescription: description
               };
               await order.save();
+              
+              // Gửi email xác nhận thanh toán (không chặn luồng đồng bộ)
+              emailService.sendPaymentSuccessEmail(order).catch(err => {
+                console.error('Lỗi khi gửi email xác nhận thanh toán (GoogleSheet):', err);
+              });
+              
               matchedCount++;
             }
           }
