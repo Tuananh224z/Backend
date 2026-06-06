@@ -1,5 +1,5 @@
-const User = require("../../models/user");
-const Cart = require("../../models/cart");
+const User = require("../models/user");
+const Cart = require("../models/cart");
 const bcrypt = require("bcryptjs");
 const { signToken } = require("../utils/token");
 const jwt = require("jsonwebtoken");
