@@ -1,5 +1,5 @@
-const Cart = require("../../models/cart");
-const Product = require("../../models/product");
+const Cart = require("../models/cart");
+const Product = require("../models/product");
 
 /**
  * Get user cart, populated with product details.

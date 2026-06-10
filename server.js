@@ -27,15 +27,15 @@ const PORT = process.env.PORT || 5000;
 connectDB();
 
 // Đăng ký các Mongoose Models để đảm bảo chúng được khởi tạo chính xác
-require("./models/user");
-require("./models/category");
-require("./models/brand");
-require("./models/product");
-require("./models/cart");
-require("./models/order");
-require("./models/review");
-require("./models/chatbotSession");
-require("./models/systemSettings");
+require("./src/models/user");
+require("./src/models/category");
+require("./src/models/brand");
+require("./src/models/product");
+require("./src/models/cart");
+require("./src/models/order");
+require("./src/models/review");
+require("./src/models/chatbotSession");
+require("./src/models/systemSettings");
 
 console.log("Đã tải thành công toàn bộ Mongoose Models!");
 

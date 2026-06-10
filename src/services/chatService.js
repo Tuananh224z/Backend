@@ -1,9 +1,9 @@
 const axios = require("axios");
-const Product = require("../../models/product");
-const SystemSettings = require("../../models/systemSettings");
-const ChatbotSession = require("../../models/chatbotSession");
-const Category = require("../../models/category");
-const Brand = require("../../models/brand");
+const Product = require("../models/product");
+const SystemSettings = require("../models/systemSettings");
+const ChatbotSession = require("../models/chatbotSession");
+const Category = require("../models/category");
+const Brand = require("../models/brand");
 
 /**
  * Perform RAG: Retrieve relevant products, build prompt, call LLM.

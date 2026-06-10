@@ -1,6 +1,6 @@
-const Product = require("../../models/product");
-const Category = require("../../models/category");
-const Brand = require("../../models/brand");
+const Product = require("../models/product");
+const Category = require("../models/category");
+const Brand = require("../models/brand");
 
 /**
  * Get filtered and paginated list of active products.

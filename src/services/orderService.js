@@ -1,6 +1,6 @@
-const Order = require("../../models/order");
-const Cart = require("../../models/cart");
-const Product = require("../../models/product");
+const Order = require("../models/order");
+const Cart = require("../models/cart");
+const Product = require("../models/product");
 
 /**
  * Helper to generate a unique order code.

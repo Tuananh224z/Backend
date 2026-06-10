@@ -37,7 +37,7 @@ const getOrderById = async (req, res) => {
     const userId = req.user.role === "admin" ? null : req.user._id;
 
     // Tìm đơn hàng cơ bản trước để xem có cần đồng bộ Casso không
-    const Order = require("../../models/order");
+    const Order = require("../models/order");
     const basicQuery = { _id: req.params.id };
     if (userId) basicQuery.user = userId;
     const basicOrder = await Order.findOne(basicQuery);

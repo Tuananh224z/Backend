@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const User = require("../../models/user");
+const User = require("../models/user");
 
 /**
  * Middleware to protect routes and verify JWT tokens.

@@ -1,4 +1,4 @@
-const Order = require('../../models/order');
+const Order = require('../models/order');
 const axios = require('axios');
 const emailService = require('./emailService');
 

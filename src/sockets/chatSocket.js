@@ -1,4 +1,4 @@
-const ChatbotSession = require("../../models/chatbotSession");
+const ChatbotSession = require("../models/chatbotSession");
 const chatService = require("../services/chatService");
 
 const initChatSocket = (io) => {

@@ -1,4 +1,4 @@
-const SystemSettings = require("../../models/systemSettings");
+const SystemSettings = require("../models/systemSettings");
 
 const initSystemSettings = async () => {
   try {

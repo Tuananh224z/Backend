@@ -1,4 +1,4 @@
-const User = require("../../models/user");
+const User = require("../models/user");
 
 /**
  * Admin: Get all users.
@@ -74,7 +74,7 @@ const createUserAdmin = async (userData) => {
   }
 
   const bcrypt = require("bcryptjs");
-  const Cart = require("../../models/cart");
+  const Cart = require("../models/cart");
 
   // 2. Mã hóa mật khẩu
   const salt = await bcrypt.genSalt(10);

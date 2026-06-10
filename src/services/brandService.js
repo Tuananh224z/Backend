@@ -1,4 +1,4 @@
-const Brand = require("../../models/brand");
+const Brand = require("../models/brand");
 
 /**
  * Get active brands (public).

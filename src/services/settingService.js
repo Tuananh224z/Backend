@@ -1,4 +1,4 @@
-const SystemSettings = require("../../models/systemSettings");
+const SystemSettings = require("../models/systemSettings");
 
 /**
  * Get active system settings.

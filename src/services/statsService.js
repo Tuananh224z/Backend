@@ -1,7 +1,7 @@
-const Order = require("../../models/order");
-const User = require("../../models/user");
-const Product = require("../../models/product");
-const ChatbotSession = require("../../models/chatbotSession");
+const Order = require("../models/order");
+const User = require("../models/user");
+const Product = require("../models/product");
+const ChatbotSession = require("../models/chatbotSession");
 
 /**
  * Admin: Get business summary statistics.

@@ -1,5 +1,5 @@
-const Review = require("../../models/review");
-const Order = require("../../models/order");
+const Review = require("../models/review");
+const Order = require("../models/order");
 
 // Danh sách từ ngữ thô tục / cấm
 const PROFANITY_BLACKLIST = [
