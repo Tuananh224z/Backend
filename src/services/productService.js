@@ -191,7 +191,7 @@ const updateProduct = async (productId, updateData) => {
     }
   }
 
-  const updatedProduct = await Product.findByIdAndUpdate(productId, { $set: updateData }, { new: true, runValidators: true });
+  const updatedProduct = await Product.findByIdAndUpdate(productId, { $set: updateData }, { returnDocument: 'after', runValidators: true });
   if (!updatedProduct) {
     throw new Error("Không tìm thấy sản phẩm để cập nhật");
   }

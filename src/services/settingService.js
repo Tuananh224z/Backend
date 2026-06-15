@@ -37,7 +37,7 @@ const updateSystemSettings = async (updateData, adminId) => {
     settings = await SystemSettings.findByIdAndUpdate(
       settings._id,
       { $set: finalData },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
   }
 

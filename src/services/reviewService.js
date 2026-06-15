@@ -92,7 +92,7 @@ const adminUpdateReviewStatus = async (reviewId, isActive) => {
   const updatedReview = await Review.findOneAndUpdate(
     { _id: reviewId },
     { $set: { isActive } },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!updatedReview) {
@@ -109,7 +109,7 @@ const adminReplyReview = async (reviewId, adminReply) => {
   const updatedReview = await Review.findOneAndUpdate(
     { _id: reviewId },
     { $set: { adminReply, adminRepliedAt: new Date() } },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!updatedReview) {

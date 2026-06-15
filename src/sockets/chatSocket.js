@@ -75,7 +75,7 @@ const initChatSocket = (io) => {
         const session = await ChatbotSession.findOneAndUpdate(
           { sessionToken },
           { $set: { feedback } },
-          { new: true }
+          { returnDocument: 'after' }
         );
 
         if (session) {

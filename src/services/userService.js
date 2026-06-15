@@ -30,7 +30,7 @@ const toggleUserLockAdmin = async (userId) => {
   const updatedUser = await User.findByIdAndUpdate(
     userId,
     { isActive: !user.isActive },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   ).select("-password");
 
   return updatedUser;
@@ -47,7 +47,7 @@ const updateUserRoleAdmin = async (userId, role) => {
   const updatedUser = await User.findByIdAndUpdate(
     userId,
     { role },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   ).select("-password");
 
   if (!updatedUser) {

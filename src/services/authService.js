@@ -144,7 +144,7 @@ const updateUserProfile = async (userId, profileData) => {
     }
   }
 
-  const updatedUser = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true, runValidators: true }).select("-password");
+  const updatedUser = await User.findByIdAndUpdate(userId, { $set: updates }, { returnDocument: 'after', runValidators: true }).select("-password");
 
   if (!updatedUser) {
     throw new Error("Người dùng không tồn tại");

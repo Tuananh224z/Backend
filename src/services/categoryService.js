@@ -61,7 +61,7 @@ const updateCategory = async (categoryId, updateData) => {
     }
   }
 
-  const updatedCategory = await Category.findByIdAndUpdate(categoryId, { $set: updateData }, { new: true, runValidators: true });
+  const updatedCategory = await Category.findByIdAndUpdate(categoryId, { $set: updateData }, { returnDocument: 'after', runValidators: true });
   if (!updatedCategory) {
     throw new Error("Không tìm thấy danh mục để cập nhật");
   }

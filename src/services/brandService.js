@@ -64,7 +64,7 @@ const updateBrand = async (brandId, updateData) => {
     }
   }
 
-  const updatedBrand = await Brand.findByIdAndUpdate(brandId, { $set: updateData }, { new: true, runValidators: true });
+  const updatedBrand = await Brand.findByIdAndUpdate(brandId, { $set: updateData }, { returnDocument: 'after', runValidators: true });
   if (!updatedBrand) {
     throw new Error("Không tìm thấy thương hiệu để cập nhật");
   }
