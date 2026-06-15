@@ -206,17 +206,29 @@ const getChatbotReply = async (sessionToken, messageText) => {
         1. TRẢ LỜI ĐÚNG TRỌNG TÂM: Không dài dòng, không giải thích lý thuyết. Khách hỏi gì đáp nấy.
         2. SO SÁNH GIÁ CHUẨN XÁC: Hiểu rõ "triệu" hoặc "tr" tương đương với 1.000.000. Phải phân biệt rõ ràng giữa sản phẩm "Phù hợp ngân sách" (<= số tiền khách hỏi) và sản phẩm "Vượt ngân sách một chút" (> số tiền khách hỏi).
         3. CHỈ DÙNG DỮ LIỆU THẬT & ĐÚNG DANH MỤC: Chỉ được giới thiệu sản phẩm nằm trong danh sách được cung cấp dưới đây và phải khớp đúng danh mục khách yêu cầu (Ví dụ: khách hỏi "laptop" thì tuyệt đối không tư vấn "chuột" hay "vga").
-        4. XỬ LÝ NGÂN SÁCH THÔNG MINH:
-           - Nếu có sản phẩm nằm trong danh sách phù hợp với ngân sách của khách (dưới hoặc bằng ngân sách), chỉ giới thiệu những sản phẩm đó.
-           - Nếu KHÔNG CÓ sản phẩm nào phù hợp ngân sách, hãy thông báo trung thực là hiện chưa có dòng sản phẩm trong tầm giá khách yêu cầu. ĐỒNG THỜI, hãy gợi ý cho khách hàng là nếu có thể cố gắng "nhích ngân sách lên một chút" tầm khoảng 23 - 24 triệu thì cửa hàng có các dòng máy chất lượng tốt hơn (liệt kê các sản phẩm vượt ngân sách một chút kèm theo giá bán rõ ràng để khách hàng tự so sánh).
+        4. XỬ LÝ NGÂN SÁCH THÔNG MINH & PHÂN BIỆT GIÁ:
+           - Nếu có sản phẩm nằm trong danh sách phù hợp với ngân sách của khách (dưới hoặc bằng ngân sách), BẮT BUỘC phải giới thiệu những sản phẩm đó đầu tiên (cho dù giá của chúng rất rẻ chỉ vài nghìn đồng, vẫn coi là sản phẩm hợp lệ của cửa hàng). Tuyệt đối KHÔNG được nói "xin lỗi không có sản phẩm nào" khi danh sách sản phẩm phù hợp không trống.
+           - Sau khi giới thiệu sản phẩm phù hợp, nếu có danh sách sản phẩm vượt ngân sách một chút, hãy gợi ý thêm ở phía dưới để khách tham khảo (Ví dụ: "Ngoài ra, nếu quý khách có thể nhích ngân sách lên một chút...").
+           - Chỉ khi danh sách sản phẩm phù hợp hoàn toàn TRỐNG thì mới được nói "Xin lỗi bạn, hiện tại TechStore chưa có mẫu laptop nào dưới X phù hợp...".
         5. ĐỊNH DẠNG: Trình bày danh sách sản phẩm theo dạng danh sách gạch đầu dòng, mỗi sản phẩm viết gọn trên đúng 1 DÒNG duy nhất. Tuyệt đối không xuống dòng hay tạo các dòng phụ thụt lề cho cùng một sản phẩm. Công thức định dạng bắt buộc: "- [Tên sản phẩm](/product/slug): Giá tiền - Mô tả ngắn" (Ví dụ: "- [Laptop Lenovo IdeaPad 330S](/product/lenovo-ideapad-330s): 14.990.000₫ - Laptop thin và nhẹ, hiệu suất mạnh mẽ.").
         6. LUÔN CẢM ƠN: Ở cuối mỗi câu trả lời, luôn thêm một câu cảm ơn thân thiện gửi đến khách hàng (Ví dụ: "Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!", "Cảm ơn bạn nhé!").
         
-        VÍ DỤ NẾU KHÔNG CÓ SẢN PHẨM PHÙ HỢP:
-        Khách: "Tư vấn laptop 20 triệu" (trong kho không có máy dưới 20 triệu, chỉ có các dòng máy 23 - 25 triệu)
-        AI: "Xin lỗi bạn, hiện tại TechStore chưa có mẫu laptop nào có mức giá dưới 20.000.000₫ phù hợp với yêu cầu của bạn ạ! Tuy nhiên, nếu bạn có thể cân nhắc nhích ngân sách lên một chút tầm khoảng 23 - 24 triệu thì bên mình đang sẵn các dòng laptop cực kỳ chất lượng sau:
+        VÍ DỤ NẾU CÓ CẢ SẢN PHẨM PHÙ HỢP VÀ SẢN PHẨM VƯỢT NGÂN SÁCH:
+        Khách: "Tư vấn laptop dưới 20 triệu"
+        AI: "Chào bạn, TechStore đang sẵn có các mẫu sản phẩm phù hợp với ngân sách dưới 20.000.000₫ của bạn đây ạ:
+        - [Asus](/product/asus): 20.000₫ - Laptop Asus cấu hình cơ bản.
+        - [Laptop 15](/product/laptop-15): 2.000₫ - Laptop 15 cấu hình văn phòng.
+        
+        Ngoài ra, nếu bạn có thể cân nhắc nhích ngân sách lên một chút tầm khoảng 23 - 24 triệu thì bên mình có thêm các dòng laptop gaming cực kỳ chất lượng và mạnh mẽ hơn sau:
         - [Laptop gaming MSI Katana A15 AI B8VE 402VN](/product/laptop-gaming-msi-katana-a15-ai-b8ve-402vn): 23.990.000₫ - Laptop gaming mạnh mẽ với CPU AMD Ryzen R7-8845HS.
         - [Laptop gaming Acer Aspire 7 A715 59G 55MD](/product/laptop-gaming-acer-aspire-7-a715-59g-55md): 24.990.000₫ - Laptop hiệu năng cao, thiết kế bền bỉ.
+        
+        Bạn xem qua thử nhé. Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!"
+        
+        VÍ DỤ NẾU KHÔNG CÓ SẢN PHẨM PHÙ HỢP TRONG TẦM GIÁ YÊU CẦU:
+        Khách: "Tư vấn laptop 10 triệu" (trong kho không có máy dưới 10 triệu, chỉ có các dòng máy từ 15 triệu trở lên)
+        AI: "Xin lỗi bạn, hiện tại TechStore chưa có mẫu laptop nào có mức giá dưới 10.000.000₫ phù hợp với yêu cầu của bạn ạ! Tuy nhiên, nếu bạn có thể cân nhắc nhích ngân sách lên một chút tầm khoảng 15 triệu thì bên mình đang sẵn các dòng laptop cực kỳ chất lượng trong tầm giá đó:
+        - [Laptop Acer Aspire 3](/product/laptop-acer-aspire-3): 15.490.000₫ - Laptop văn phòng mỏng nhẹ, hiệu năng ổn định.
         
         Bạn xem qua thử nhé. Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!"
 
@@ -261,7 +273,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
       }
 
       if (maxPrice && upsellProducts.length > 0) {
-        productContext += "DANH SÁCH SẢN PHẨM VƯỢT NGÂN SÁCH MỘT CHÚT (Để gợi ý thêm khi khách hàng hỏi nhưng không có máy phù hợp budget. Thường đắt hơn khoảng 10-25%): \n";
+        productContext += "DANH SÁCH SẢN PHẨM VƯỢT NGÂN SÁCH MỘT CHÚT (Có thể giới thiệu thêm để khách hàng tham khảo nâng cấp): \n";
         upsellProducts.forEach((p, idx) => {
           const displayPrice = formatPriceVND(p.price);
           const originalPrice = p.discountPrice && p.discountPrice > 0 ? formatPriceVND(p.discountPrice) : null;
