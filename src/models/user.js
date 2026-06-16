@@ -12,7 +12,16 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, "Mật khẩu là bắt buộc"],
+      required: [
+        function () {
+          return !this.googleId;
+        },
+        "Mật khẩu là bắt buộc",
+      ],
+    },
+    googleId: {
+      type: String,
+      default: "",
     },
     fullName: {
       type: String,

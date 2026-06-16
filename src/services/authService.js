@@ -4,6 +4,8 @@ const bcrypt = require("bcryptjs");
 const { signToken } = require("../utils/token");
 const jwt = require("jsonwebtoken");
 const emailService = require("./emailService");
+const { OAuth2Client } = require("google-auth-library");
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 /**
  * Service to handle registration logic.
@@ -67,6 +69,78 @@ const loginUser = async (email, password) => {
   // 4. Tạo token
   const token = signToken(user._id);
 
+  const userResponse = user.toObject();
+  delete userResponse.password;
+
+  return { user: userResponse, token };
+};
+
+/**
+ * Service to handle Google login logic.
+ */
+const loginWithGoogle = async (idToken) => {
+  if (!idToken) {
+    throw new Error("Không tìm thấy Google ID Token");
+  }
+
+  let payload;
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    payload = ticket.getPayload();
+  } catch (error) {
+    console.error("Lỗi xác thực Google Token:", error);
+    throw new Error("Xác thực tài khoản Google thất bại hoặc Token hết hạn");
+  }
+
+  const { email, name, picture, sub: googleId } = payload;
+
+  if (!email) {
+    throw new Error("Tài khoản Google không cung cấp email");
+  }
+
+  // 1. Tìm user theo googleId hoặc email
+  let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+  if (user) {
+    // Nếu user tồn tại nhưng chưa có googleId (do đăng ký bằng email trước đó), bổ sung googleId
+    let isUpdated = false;
+    if (!user.googleId) {
+      user.googleId = googleId;
+      isUpdated = true;
+    }
+    // Cập nhật avatar nếu chưa có
+    if (!user.avatar && picture) {
+      user.avatar = picture;
+      isUpdated = true;
+    }
+    if (isUpdated) {
+      await user.save();
+    }
+  } else {
+    // 2. Nếu chưa tồn tại, tạo User mới (đăng ký qua Google)
+    user = await User.create({
+      email,
+      fullName: name || "Google User",
+      avatar: picture || "",
+      googleId,
+    });
+
+    // 3. Tạo giỏ hàng trống cho User mới
+    await Cart.create({ user: user._id, items: [] });
+  }
+
+  // 4. Kiểm tra trạng thái hoạt động
+  if (!user.isActive) {
+    throw new Error("Tài khoản của bạn đã bị khóa");
+  }
+
+  // 5. Tạo token
+  const token = signToken(user._id);
+
+  // Ẩn mật khẩu khi trả về
   const userResponse = user.toObject();
   delete userResponse.password;
 
@@ -241,6 +315,7 @@ const resetPassword = async (token, newPassword) => {
 module.exports = {
   registerUser,
   loginUser,
+  loginWithGoogle,
   getUserProfile,
   updateUserProfile,
   changeUserPassword,
