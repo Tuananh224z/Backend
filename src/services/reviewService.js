@@ -21,7 +21,8 @@ const getProductReviews = async (productId) => {
 const createProductReview = async (userId, reviewData) => {
   const { product, rating, comment } = reviewData;
 
-  // 1. Kiểm tra xem người dùng đã mua sản phẩm này và đơn hàng giao thành công chưa
+  // 1. Bỏ kiểm tra xem người dùng đã mua sản phẩm này chưa để cho phép đánh giá tự do
+  /*
   const purchasedOrder = await Order.findOne({
     user: userId,
     orderStatus: "Delivered",
@@ -30,6 +31,7 @@ const createProductReview = async (userId, reviewData) => {
   if (!purchasedOrder) {
     throw new Error("Bạn chỉ được phép đánh giá sản phẩm khi đã mua và đơn hàng được giao thành công.");
   }
+  */
 
   // 2. Kiểm tra xem người dùng đã đánh giá sản phẩm này chưa
   const existingReview = await Review.findOne({ user: userId, product });
