@@ -127,10 +127,17 @@ const getChatbotReply = async (sessionOrToken, messageText) => {
         session.metadata.buildStep = 2;
         session.markModified("metadata");
 
-        return {
-          reply: `**Bước 2:** Ngân sách này bạn muốn bao gồm những gì? (Ví dụ: *Chỉ case máy tính* / *Cả màn hình* / *Kèm phím chuột tai nghe*...)`,
-          suggestedProducts: []
-        };
+        if (session.metadata.buildType === "laptop") {
+          return {
+            reply: `**Bước 2:** Bạn muốn sử dụng chiếc Laptop này cho nhu cầu chính là gì? (Ví dụ: *Học tập, văn phòng mỏng nhẹ* / *Chơi game giải trí, đồ họa* / *Lập trình, kỹ thuật*...)`,
+            suggestedProducts: []
+          };
+        } else {
+          return {
+            reply: `**Bước 2:** Ngân sách này bạn muốn bao gồm những gì? (Ví dụ: *Chỉ case máy tính* / *Cả màn hình* / *Kèm phím chuột tai nghe*...)`,
+            suggestedProducts: []
+          };
+        }
       } 
       
       if (currentStep === 2) {
@@ -158,7 +165,7 @@ const getChatbotReply = async (sessionOrToken, messageText) => {
         const systemPrompt = `Bạn là Trợ lý Thiết kế Cấu hình Phần cứng chuyên nghiệp của TechStore.
         
         Nhiệm vụ của bạn là:
-        1. Thiết kế một cấu hình ${finalBuildType === "laptop" ? "Laptop" : "PC"} hoàn chỉnh và tối ưu nhất cho khách hàng với ngân sách là ${formatPriceVND(finalBudVal)}. Khách hàng yêu cầu bộ sản phẩm phải bao gồm: ${finalIncludes}.
+        1. Thiết kế một cấu hình ${finalBuildType === "laptop" ? "Laptop" : "PC"} hoàn chỉnh và tối ưu nhất cho khách hàng với ngân sách là ${formatPriceVND(finalBudVal)}. ${finalBuildType === "laptop" ? `Khách hàng yêu cầu thiết bị phải đáp ứng nhu cầu: ${finalIncludes}.` : `Khách hàng yêu cầu bộ sản phẩm phải bao gồm: ${finalIncludes}.`}
         2. Các linh kiện được chọn phải tương thích hoàn toàn về mặt kỹ thuật (Ví dụ: CPU và Mainboard khớp socket, RAM đúng chuẩn DDR4/DDR5 hỗ trợ, PSU đủ công suất gánh VGA, kích thước VGA vừa vỏ case).
         3. Sử dụng tối đa các linh kiện thực tế đang bán tại TechStore được cung cấp trong danh sách kho bên dưới. Nếu một linh kiện nào đó thiếu trong kho (ví dụ: Mainboard, nguồn, tản nhiệt), bạn được phép đề xuất linh kiện chất lượng thực tế ngoài thị trường và ước lượng giá hợp lý.
         4. BẮT BUỘC chèn đường dẫn liên kết dạng markdown: [Tên linh kiện](/product/slug) đối với bất kỳ sản phẩm nào có trong danh sách kho TechStore dưới đây để khách hàng click mua được ngay.
@@ -207,10 +214,23 @@ const getChatbotReply = async (sessionOrToken, messageText) => {
 
         const replyText = response.data.choices[0].message.content;
 
+        // Hậu xử lý: Chuyển các đường dẫn sản phẩm ảo thành chữ in đậm thường (tránh link 404)
+        let sanitizedReplyText = replyText;
+        const linkRegex = /\[([^\]]+)\]\(\/product\/([a-zA-Z0-9_\-]+)\)/g;
+        const dbSlugs = new Set(allProducts.map(p => p.slug));
+
+        sanitizedReplyText = replyText.replace(linkRegex, (match, displayName, slug) => {
+          if (dbSlugs.has(slug)) {
+            return match;
+          } else {
+            return `**${displayName}**`;
+          }
+        });
+
         // Trả về cấu hình hoàn chỉnh
         return {
-          reply: replyText,
-          suggestedProducts: allProducts.filter(p => replyText.includes(p.slug)).map(p => p._id)
+          reply: sanitizedReplyText,
+          suggestedProducts: allProducts.filter(p => sanitizedReplyText.includes(p.slug)).map(p => p._id)
         };
       }
     }
