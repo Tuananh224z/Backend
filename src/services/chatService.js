@@ -116,7 +116,7 @@ const getChatbotReply = async (sessionOrToken, messageText) => {
 
         if (!budgetVal) {
           return {
-            reply: `Ngân sách của bạn chưa rõ ràng. Bạn vui lòng nhập số tiền cụ thể (ví dụ: *15 triệu*, *20 triệu*, hoặc *15 - 25 triệu*) để mình hỗ trợ nhé!`,
+            reply: `Ngân sách của bạn chưa rõ ràng. Bạn vui lòng nhập số tiền cụ thể (ví dụ: 15 triệu, 20 triệu, hoặc 15 - 25 triệu) để mình hỗ trợ nhé!`,
             suggestedProducts: []
           };
         }
@@ -129,12 +129,12 @@ const getChatbotReply = async (sessionOrToken, messageText) => {
 
         if (session.metadata.buildType === "laptop") {
           return {
-            reply: `**Bước 2:** Bạn muốn sử dụng chiếc Laptop này cho nhu cầu chính là gì? (Ví dụ: *Học tập, văn phòng mỏng nhẹ* / *Chơi game giải trí, đồ họa* / *Lập trình, kỹ thuật*...)`,
+            reply: `Bước 2: Bạn muốn sử dụng chiếc Laptop này cho nhu cầu chính là gì?\n(Ví dụ: Học tập, văn phòng mỏng nhẹ / Chơi game giải trí, đồ họa / Lập trình, kỹ thuật...)`,
             suggestedProducts: []
           };
         } else {
           return {
-            reply: `**Bước 2:** Ngân sách này bạn muốn bao gồm những gì? (Ví dụ: *Chỉ case máy tính* / *Cả màn hình* / *Kèm phím chuột tai nghe*...)`,
+            reply: `Bước 2: Ngân sách này bạn muốn bao gồm những gì?\n(Ví dụ: Chỉ case máy tính / Cả màn hình / Kèm phím chuột tai nghe...)`,
             suggestedProducts: []
           };
         }
@@ -246,7 +246,7 @@ const getChatbotReply = async (sessionOrToken, messageText) => {
       session.markModified("metadata");
 
       return {
-        reply: `🛠️ **Bắt đầu quy trình Tự động Build ${session.metadata.buildType === "laptop" ? "Laptop" : "PC"}**\n\n**Bước 1:** Ngân sách dự kiến của bạn là bao nhiêu?`,
+        reply: `🛠️ Bắt đầu quy trình Tự động Build ${session.metadata.buildType === "laptop" ? "Laptop" : "PC"}\n\nBước 1: Ngân sách dự kiến của bạn là bao nhiêu?`,
         suggestedProducts: []
       };
     }
