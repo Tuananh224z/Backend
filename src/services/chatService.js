@@ -5,6 +5,30 @@ const ChatbotSession = require("../models/chatbotSession");
 const Category = require("../models/category");
 const Brand = require("../models/brand");
 
+// Helper to strip Vietnamese diacritics for easier parsing
+const stripDiacritics = (str) => {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+};
+
+// Helper to convert number and unit to numeric value
+const getPriceVal = (numStr, unitStr) => {
+  let val = numStr.replace(/[,.]/g, "");
+  let num = parseFloat(val);
+  if (!unitStr) return num;
+  const u = unitStr.toLowerCase();
+  if (u === "trieu" || u === "tr" || u === "trieu") {
+    return num * 1000000;
+  }
+  if (u === "nghin" || u === "ngan" || u === "k") {
+    return num * 1000;
+  }
+  return num; // d, dong, vnd
+};
+
 /**
  * Perform RAG: Retrieve relevant products, build prompt, call LLM.
  */
@@ -15,33 +39,50 @@ const getChatbotReply = async (sessionToken, messageText) => {
     let upsellProducts = [];
     const textLower = messageText.toLowerCase();
 
-    // Phân tích khoảng giá (vd: "dưới 20tr", "dưới 20 triệu", "laptop 20 triệu")
+    // Phân tích khoảng giá (vd: "dưới 20tr", "trên 15 triệu", "từ 15 đến 25 triệu")
+    let minPrice = null;
     let maxPrice = null;
-    let prices = [];
-    
-    // 1. Tìm tất cả các mức giá bằng triệu/tr/trieu
-    const trieuMatches = [...textLower.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:triệu|tr|trieu)\b/gi)];
-    for (const match of trieuMatches) {
-      let val = match[1].replace(/[,.]/g, "");
-      prices.push(parseFloat(val) * 1000000);
-    }
-    
-    // 2. Tìm tất cả các mức giá bằng nghìn/ngàn/k
-    const nghinMatches = [...textLower.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:nghìn|ngàn|k)\b/gi)];
-    for (const match of nghinMatches) {
-      let val = match[1].replace(/[,.]/g, "");
-      prices.push(parseFloat(val) * 1000);
-    }
-    
-    // 3. Tìm tất cả các mức giá bằng đ/đồng/vnd
-    const vndMatches = [...textLower.matchAll(/(\d{1,3}(?:\.\d{3})+(?:\.\d{3})?|\d{5,})\s*(?:đ|đồng|vnd)\b/gi)];
-    for (const match of vndMatches) {
-      let val = match[1].replace(/[,.]/g, "");
-      prices.push(parseFloat(val));
-    }
-    
-    if (prices.length > 0) {
-      maxPrice = Math.max(...prices);
+
+    const textNormalized = stripDiacritics(textLower);
+
+    // Regex tìm khoảng giá dạng: từ 15 đến 25 triệu, từ 15tr tới 20tr
+    const rangeRegex = /(\d+(?:[.,]\d+)?)\s*(trieu|tr|nghin|ngan|k|d|dong|vnd)?\s*(?:den|toi|tam|-)\s*(\d+(?:[.,]\d+)?)\s*(trieu|tr|nghin|ngan|k|d|dong|vnd)/gi;
+    const rangeMatch = rangeRegex.exec(textNormalized);
+
+    if (rangeMatch) {
+      const num1Str = rangeMatch[1];
+      const unit1Str = rangeMatch[2] || rangeMatch[4];
+      const num2Str = rangeMatch[3];
+      const unit2Str = rangeMatch[4];
+
+      minPrice = getPriceVal(num1Str, unit1Str);
+      maxPrice = getPriceVal(num2Str, unit2Str);
+    } else {
+      // Tìm các mức giá đơn lẻ
+      const priceRegex = /(\d+(?:[.,]\d+)?)\s*(trieu|tr|nghin|ngan|k|d|dong|vnd)/gi;
+      const matches = [...textNormalized.matchAll(priceRegex)];
+
+      if (matches.length > 0) {
+        const match = matches[0];
+        const valStr = match[1];
+        const unitStr = match[2];
+        const priceVal = getPriceVal(valStr, unitStr);
+
+        const index = match.index;
+        const subBefore = textNormalized.substring(Math.max(0, index - 20), index);
+        const subAfter = textNormalized.substring(index + match[0].length, index + match[0].length + 20);
+
+        const isAbove = /tren|hon|lon hon|cao hon|toi thieu/i.test(subBefore) || /tro len|tro di|tren|hon/i.test(subAfter);
+        const isBelow = /duoi|thap hon|nho hon|toi da/i.test(subBefore) || /tro xuong|do lai/i.test(subAfter);
+
+        if (isAbove) {
+          minPrice = priceVal;
+        } else if (isBelow) {
+          maxPrice = priceVal;
+        } else {
+          maxPrice = priceVal;
+        }
+      }
     }
 
     // Phân tích danh mục (vd: "laptop", "pc", "chuột", "bàn phím"...)
@@ -90,14 +131,20 @@ const getChatbotReply = async (sessionToken, messageText) => {
     if (matchedBrandIds.length > 0) {
       query.brand = { $in: matchedBrandIds };
     }
-    if (maxPrice) {
-      query.price = { $lte: maxPrice };
+    if (minPrice !== null || maxPrice !== null) {
+      query.price = {};
+      if (minPrice !== null) {
+        query.price.$gte = minPrice;
+      }
+      if (maxPrice !== null) {
+        query.price.$lte = maxPrice;
+      }
     }
 
     // Nhận dạng tin nhắn chào hỏi/xã giao (Small Talk) để bypass RAG
     const smallTalkKeywords = ["chào", "hello", "hi", "hey", "cảm ơn", "cám ơn", "thank", "bye", "tạm biệt", "bạn là ai", "tên gì", "admin", "chủ shop"];
     const cleanText = textLower.trim();
-    const hasFilters = categoryIds.length > 0 || matchedBrandIds.length > 0 || maxPrice !== null;
+    const hasFilters = categoryIds.length > 0 || matchedBrandIds.length > 0 || minPrice !== null || maxPrice !== null;
     
     // Nếu không khớp bộ lọc cụ thể nào, và tin nhắn quá ngắn hoặc chứa từ khóa xã giao
     const isSmallTalk = !hasFilters && (
@@ -115,7 +162,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
       isRAGSkipped = true;
     } else {
       // Thực hiện tìm kiếm nâng cao theo bộ lọc trước
-      if (categoryIds.length > 0 || matchedBrandIds.length > 0 || maxPrice) {
+      if (categoryIds.length > 0 || matchedBrandIds.length > 0 || minPrice !== null || maxPrice !== null) {
         matchedProducts = await Product.find(query)
           .select("name price discountPrice specs slug")
           .limit(3);
@@ -134,8 +181,10 @@ const getChatbotReply = async (sessionToken, messageText) => {
       // Nếu bộ lọc không ra kết quả hoặc không có bộ lọc cụ thể, dùng Text Index
       if (matchedProducts.length === 0 && messageText && messageText.trim() !== "") {
         const textQuery = { isActive: true };
-        if (maxPrice) {
-          textQuery.price = { $lte: maxPrice };
+        if (minPrice !== null || maxPrice !== null) {
+          textQuery.price = {};
+          if (minPrice !== null) textQuery.price.$gte = minPrice;
+          if (maxPrice !== null) textQuery.price.$lte = maxPrice;
         }
         matchedProducts = await Product.find({
           ...textQuery,
@@ -163,8 +212,10 @@ const getChatbotReply = async (sessionToken, messageText) => {
 
         if (isProductQuery) {
           const fallbackQuery = { isActive: true };
-          if (maxPrice) {
-            fallbackQuery.price = { $lte: maxPrice };
+          if (minPrice !== null || maxPrice !== null) {
+            fallbackQuery.price = {};
+            if (minPrice !== null) fallbackQuery.price.$gte = minPrice;
+            if (maxPrice !== null) fallbackQuery.price.$lte = maxPrice;
           }
           matchedProducts = await Product.find({
             ...fallbackQuery,
@@ -231,7 +282,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
         - [Laptop Acer Aspire 3](/product/laptop-acer-aspire-3): 15.490.000₫ - Laptop văn phòng mỏng nhẹ, hiệu năng ổn định.
         
         Bạn xem qua thử nhé. Cảm ơn bạn đã quan tâm đến sản phẩm của TechStore ạ!"
-
+        
         DANH SÁCH SẢN PHẨM TRONG KHO:
         \${productContext}`,
           temperature: 0.7,
@@ -249,11 +300,15 @@ const getChatbotReply = async (sessionToken, messageText) => {
     if (isRAGSkipped) {
       productContext = "(Khách đang chào hỏi xã giao hoặc trò chuyện thông thường, không hỏi về sản phẩm cụ thể. Bạn không cần liệt kê sản phẩm nào từ kho, hãy trả lời xã giao ngắn gọn, thân thiện và sẵn sàng tư vấn khi họ cần.)";
     } else {
-      if (maxPrice) {
+      if (minPrice !== null && maxPrice !== null) {
+        productContext += `YÊU CẦU NGÂN SÁCH CỦA KHÁCH HÀNG: từ ${formatPriceVND(minPrice)} đến ${formatPriceVND(maxPrice)}\n\n`;
+      } else if (minPrice !== null) {
+        productContext += `YÊU CẦU NGÂN SÁCH CỦA KHÁCH HÀNG: tối thiểu từ ${formatPriceVND(minPrice)}\n\n`;
+      } else if (maxPrice !== null) {
         productContext += `YÊU CẦU NGÂN SÁCH CỦA KHÁCH HÀNG: tối đa ${formatPriceVND(maxPrice)}\n\n`;
       }
 
-      productContext += "DANH SÁCH SẢN PHẨM PHÙ HỢP VỚI NGÂN SÁCH KHÁCH HÀNG (Giá <= ngân sách):\n";
+      productContext += "DANH SÁCH SẢN PHẨM PHÙ HỢP VỚI NGÂN SÁCH KHÁCH HÀNG (Giá <= ngân sách hoặc nằm trong khoảng):\n";
       if (matchedProducts.length > 0) {
         matchedProducts.forEach((p, idx) => {
           const displayPrice = formatPriceVND(p.price);
@@ -289,6 +344,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
         });
       }
     }
+
 
     // 4. Lấy lịch sử hội thoại gần nhất (Memory) để duy trì ngữ cảnh chat
     const session = await ChatbotSession.findOne({ sessionToken });
