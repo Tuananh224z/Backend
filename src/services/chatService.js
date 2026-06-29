@@ -235,18 +235,21 @@ const getChatbotReply = async (sessionOrToken, messageText) => {
       }
     }
 
-    // Kiểm tra ý định bắt đầu quy trình build
-    const isStartBuildQuery = /build (pc|laptop|may tinh|cấu hình|cau hinh)|tu van cau hinh|tao cau hinh/i.test(textNormalized);
+    // Kiểm tra ý định bắt đầu quy trình build / tư vấn chọn máy
+    const isStartBuildQuery = /build\s*(pc|laptop|may\s*tinh|cau\s*hinh)|tu\s*van\s*(mua\s*)?(pc|laptop|may\s*tinh|cau\s*hinh)|tao\s*(cau\s*hinh|pc|laptop)|mua\s*(pc|laptop)/i.test(textNormalized);
     if (isStartBuildQuery) {
+      const buildType = textNormalized.includes("laptop") ? "laptop" : "pc";
       session.metadata = {
         isBuildingPC: true,
         buildStep: 1,
-        buildType: textNormalized.includes("laptop") ? "laptop" : "pc"
+        buildType: buildType
       };
       session.markModified("metadata");
 
+      const actionName = buildType === "laptop" ? "Tư vấn chọn mua Laptop" : "Tự động Build PC";
+
       return {
-        reply: `🛠️ Bắt đầu quy trình Tự động Build ${session.metadata.buildType === "laptop" ? "Laptop" : "PC"}\n\nBước 1: Ngân sách dự kiến của bạn là bao nhiêu?`,
+        reply: `🛠️ Bắt đầu quy trình ${actionName}\n\nBước 1: Ngân sách dự kiến của bạn là bao nhiêu?`,
         suggestedProducts: []
       };
     }
