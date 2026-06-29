@@ -36,6 +36,30 @@ const formatPriceVND = (num) => {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "₫";
 };
 
+// Helper to filter products by specific component keywords (to avoid cross-matching inside same category)
+const filterByComponentKeywords = (products, textLower) => {
+  const textNormalized = stripDiacritics(textLower);
+  if (textNormalized.includes("ram") || textNormalized.includes("ddr")) {
+    return products.filter(p => {
+      const nameNorm = stripDiacritics(p.name.toLowerCase());
+      return nameNorm.includes("ram") || nameNorm.includes("ddr");
+    });
+  }
+  if (textNormalized.includes("ssd") || textNormalized.includes("o cung")) {
+    return products.filter(p => {
+      const nameNorm = stripDiacritics(p.name.toLowerCase());
+      return nameNorm.includes("ssd") || nameNorm.includes("o cung");
+    });
+  }
+  if (textNormalized.includes("vga") || textNormalized.includes("card man hinh") || textNormalized.includes("card do hoa")) {
+    return products.filter(p => {
+      const nameNorm = stripDiacritics(p.name.toLowerCase());
+      return nameNorm.includes("vga") || nameNorm.includes("card") || nameNorm.includes("geforce") || nameNorm.includes("rtx") || nameNorm.includes("rx");
+    });
+  }
+  return products;
+};
+
 /**
  * Perform RAG: Retrieve relevant products, build prompt, call LLM.
  */
@@ -465,6 +489,12 @@ const getChatbotReply = async (sessionOrToken, messageText) => {
       }
     }
 
+    // Áp dụng bộ lọc từ khóa chéo cho linh kiện
+    if (!isRAGSkipped) {
+      matchedProducts = filterByComponentKeywords(matchedProducts, textLower);
+      upsellProducts = filterByComponentKeywords(upsellProducts, textLower);
+    }
+
     // Sắp xếp matchedProducts theo thứ tự bán chạy nhất từ orders nếu đây là best seller query
     if (isBestSellerQuery && bestSellerProductIds.length > 0 && matchedProducts.length > 0) {
       matchedProducts.sort((a, b) => {
@@ -604,8 +634,16 @@ const getChatbotReply = async (sessionOrToken, messageText) => {
     const apiMessages = [
       { role: "system", content: systemInstruction },
       ...messageHistory,
-      { role: "user", content: messageText }
     ];
+
+    if (!isRAGSkipped && matchedProducts.length === 0) {
+      apiMessages.push({
+        role: "system",
+        content: `⚠️ [CẢNH BÁO TỐI CAO]: Trong kho của TechStore hiện tại hoàn toàn KHÔNG CÓ sản phẩm nào khớp với yêu cầu "${messageText}" của khách hàng. Bạn tuyệt đối KHÔNG ĐƯỢC tự tạo, tự chế hoặc tự bịa ra bất kỳ sản phẩm/linh kiện nào. Hãy trả lời lịch sự rằng cửa hàng hiện không có hoặc tạm hết mặt hàng này, sau đó gợi ý khách tham khảo các danh mục/sản phẩm có sẵn trong danh sách kho phía trên.`
+      });
+    }
+
+    apiMessages.push({ role: "user", content: messageText });
 
     // 6. Gọi Groq API
     const apiKey = (process.env.GROQ_API_KEY || "").trim();
@@ -634,6 +672,32 @@ const getChatbotReply = async (sessionOrToken, messageText) => {
     );
 
     const replyText = response.data.choices[0].message.content;
+
+    // Hậu xử lý (Post-processing) chống Hallucination
+    const linkRegex = /\/product\/([a-zA-Z0-9_\-]+)/g;
+    const linkMatches = [...replyText.matchAll(linkRegex)];
+    
+    if (linkMatches.length > 0) {
+      const allDbProducts = await Product.find({ isActive: true }).select("slug").lean();
+      const dbSlugs = new Set(allDbProducts.map(p => p.slug));
+      
+      let hasFakeLinks = false;
+      for (const match of linkMatches) {
+        const slug = match[1];
+        if (!dbSlugs.has(slug)) {
+          hasFakeLinks = true;
+          break;
+        }
+      }
+      
+      if (hasFakeLinks) {
+        const queryClean = messageText.replace(/[?.]/g, "").trim();
+        return {
+          reply: `Xin lỗi bạn, hiện tại TechStore chưa có sản phẩm "${queryClean}" phù hợp trong kho hàng ạ. Bạn có muốn tham khảo các mẫu PC hoặc Laptop có sẵn cấu hình mạnh mẽ khác của bên mình không ạ?\n\nCảm ơn bạn đã quan tâm đến sản phẩm của TechStore!`,
+          suggestedProducts: []
+        };
+      }
+    }
 
     // Lấy danh sách ID sản phẩm gợi ý (bao gồm cả sản phẩm khớp và sản phẩm gợi ý thêm)
     const suggestedProductIds = [...matchedProducts, ...upsellProducts].map((p) => p._id);
