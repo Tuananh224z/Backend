@@ -4,6 +4,7 @@ const SystemSettings = require("../models/systemSettings");
 const ChatbotSession = require("../models/chatbotSession");
 const Category = require("../models/category");
 const Brand = require("../models/brand");
+const Order = require("../models/order");
 
 // Helper to strip Vietnamese diacritics for easier parsing
 const stripDiacritics = (str) => {
@@ -128,6 +129,26 @@ const getChatbotReply = async (sessionToken, messageText) => {
     const isFeaturedQuery = /noi bat|featured|hot/i.test(textNormalized);
     const isNewQuery = /moi nhat|moi ve|new/i.test(textNormalized);
 
+    let bestSellerProductIds = [];
+    if (isBestSellerQuery) {
+      try {
+        const topSales = await Order.aggregate([
+          { $unwind: "$items" },
+          {
+            $group: {
+              _id: "$items.product",
+              totalSold: { $sum: "$items.quantity" }
+            }
+          },
+          { $sort: { totalSold: -1 } },
+          { $limit: 10 }
+        ]);
+        bestSellerProductIds = topSales.map(item => item._id).filter(id => id !== null);
+      } catch (err) {
+        console.error("Lỗi khi aggregate tìm best seller:", err);
+      }
+    }
+
     // Xây dựng câu truy vấn động
     const query = { isActive: true };
     if (categoryIds.length > 0) {
@@ -146,7 +167,11 @@ const getChatbotReply = async (sessionToken, messageText) => {
       }
     }
     if (isBestSellerQuery) {
-      query.isBestSeller = true;
+      if (bestSellerProductIds.length > 0) {
+        query._id = { $in: bestSellerProductIds };
+      } else {
+        query.isBestSeller = true;
+      }
     }
     if (isFeaturedQuery) {
       query.isFeatured = true;
@@ -271,6 +296,17 @@ const getChatbotReply = async (sessionToken, messageText) => {
           isRAGSkipped = true;
         }
       }
+    }
+
+    // Sắp xếp matchedProducts theo thứ tự bán chạy nhất từ orders nếu đây là best seller query
+    if (isBestSellerQuery && bestSellerProductIds.length > 0 && matchedProducts.length > 0) {
+      matchedProducts.sort((a, b) => {
+        const indexA = bestSellerProductIds.findIndex(id => id.toString() === a._id.toString());
+        const indexB = bestSellerProductIds.findIndex(id => id.toString() === b._id.toString());
+        const posA = indexA === -1 ? 999 : indexA;
+        const posB = indexB === -1 ? 999 : indexB;
+        return posA - posB;
+      });
     }
 
     // 2. Lấy cấu hình hệ thống & System Prompt
