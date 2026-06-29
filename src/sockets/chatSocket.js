@@ -33,7 +33,7 @@ const initChatSocket = (io) => {
         await session.save();
 
         // 3. Gọi dịch vụ RAG Chatbot (Tìm kiếm laptop phù hợp và hỏi Groq API)
-        const chatReply = await chatService.getChatbotReply(session, messageText);
+        const chatReply = await chatService.getChatbotReply(sessionToken, messageText);
 
         // 4. Thêm tin nhắn trả lời của Bot vào session
         session.messages.push({
