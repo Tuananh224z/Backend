@@ -30,24 +30,191 @@ const getPriceVal = (numStr, unitStr) => {
   return num; // d, dong, vnd
 };
 
+// Helper to format price to VND currency string
+const formatPriceVND = (num) => {
+  if (num === null || num === undefined) return "0₫";
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "₫";
+};
+
 /**
  * Perform RAG: Retrieve relevant products, build prompt, call LLM.
  */
-const getChatbotReply = async (sessionToken, messageText) => {
+const getChatbotReply = async (sessionOrToken, messageText) => {
   try {
+    let session;
+    if (typeof sessionOrToken === "string") {
+      session = await ChatbotSession.findOne({ sessionToken: sessionOrToken });
+    } else {
+      session = sessionOrToken;
+    }
+
+    if (!session) {
+      throw new Error("Không tìm thấy session hội thoại");
+    }
+
+    const textLower = messageText.toLowerCase();
+    const textNormalized = stripDiacritics(textLower);
+
+    // Khởi tạo metadata nếu chưa có
+    if (!session.metadata) {
+      session.metadata = {};
+    }
+
+    const metadata = session.metadata;
+    const isBuilding = metadata.isBuildingPC || false;
+    const currentStep = metadata.buildStep || 0;
+
+    // Regex tìm khoảng giá dạng: từ 15 đến 25 triệu, từ 15tr tới 20tr
+    const rangeRegex = /(\d+(?:[.,]\d+)?)\s*(trieu|tr|nghin|ngan|k|d|dong|vnd)?\s*(?:den|toi|tam|-)\s*(\d+(?:[.,]\d+)?)\s*(trieu|tr|nghin|ngan|k|d|dong|vnd)/gi;
+
+    // Luồng tự động Build PC / Laptop
+    if (isBuilding) {
+      if (currentStep === 1) {
+        // Xử lý Bước 1: Trích xuất ngân sách
+        let budgetVal = null;
+        let budgetMin = 0;
+        let budgetMax = 0;
+
+        const rangeMatch = rangeRegex.exec(textNormalized);
+        rangeRegex.lastIndex = 0; // reset
+        if (rangeMatch) {
+          budgetMin = getPriceVal(rangeMatch[1], rangeMatch[2] || rangeMatch[4]);
+          budgetMax = getPriceVal(rangeMatch[3], rangeMatch[4]);
+          budgetVal = (budgetMin + budgetMax) / 2;
+        } else {
+          const priceRegex = /(\d+(?:[.,]\d+)?)\s*(trieu|tr|nghin|ngan|k|d|dong|vnd)/gi;
+          const matches = [...textNormalized.matchAll(priceRegex)];
+          if (matches.length > 0) {
+            budgetMax = getPriceVal(matches[0][1], matches[0][2]);
+            budgetVal = budgetMax;
+          }
+        }
+
+        if (!budgetVal) {
+          return {
+            reply: `Ngân sách của bạn chưa rõ ràng. Bạn vui lòng nhập số tiền cụ thể (ví dụ: *15 triệu*, *20 triệu*, hoặc *15 - 25 triệu*) để mình hỗ trợ nhé!`,
+            suggestedProducts: []
+          };
+        }
+
+        session.metadata.budget = budgetVal;
+        session.metadata.budgetMin = budgetMin;
+        session.metadata.budgetMax = budgetMax;
+        session.metadata.buildStep = 2;
+        session.markModified("metadata");
+
+        return {
+          reply: `**Bước 2:** Ngân sách này bạn muốn bao gồm những gì? (Ví dụ: *Chỉ case máy tính* / *Cả màn hình* / *Kèm phím chuột tai nghe*...)`,
+          suggestedProducts: []
+        };
+      } 
+      
+      if (currentStep === 2) {
+        // Xử lý Bước 2: Hoàn tất thu thập thông tin và thực hiện Build PC/Laptop
+        const finalBudVal = session.metadata.budget || 15000000;
+        const finalBuildType = session.metadata.buildType || "pc";
+        const finalIncludes = messageText;
+
+        // Reset trạng thái build
+        session.metadata.isBuildingPC = false;
+        session.metadata.buildStep = 0;
+        session.markModified("metadata");
+
+        // Lấy tất cả sản phẩm đang kích hoạt trong kho để làm ngữ cảnh
+        const allProducts = await Product.find({ isActive: true })
+          .populate("category")
+          .select("name price discountPrice specs slug category");
+
+        let storeProductsContext = "DANH SÁCH LINH KIỆN & SẢN PHẨM TRONG KHO TECHSTORE:\n";
+        allProducts.forEach((p) => {
+          storeProductsContext += `- [${p.name}](/product/${p.slug}) | Giá: ${formatPriceVND(p.price)} | Phân loại: ${p.category?.name || "N/A"}\n`;
+        });
+
+        // Xây dựng Prompt sinh cấu hình chuyên dụng
+        const systemPrompt = `Bạn là Trợ lý Thiết kế Cấu hình Phần cứng chuyên nghiệp của TechStore.
+        
+        Nhiệm vụ của bạn là:
+        1. Thiết kế một cấu hình ${finalBuildType === "laptop" ? "Laptop" : "PC"} hoàn chỉnh và tối ưu nhất cho khách hàng với ngân sách là ${formatPriceVND(finalBudVal)}. Khách hàng yêu cầu bộ sản phẩm phải bao gồm: ${finalIncludes}.
+        2. Các linh kiện được chọn phải tương thích hoàn toàn về mặt kỹ thuật (Ví dụ: CPU và Mainboard khớp socket, RAM đúng chuẩn DDR4/DDR5 hỗ trợ, PSU đủ công suất gánh VGA, kích thước VGA vừa vỏ case).
+        3. Sử dụng tối đa các linh kiện thực tế đang bán tại TechStore được cung cấp trong danh sách kho bên dưới. Nếu một linh kiện nào đó thiếu trong kho (ví dụ: Mainboard, nguồn, tản nhiệt), bạn được phép đề xuất linh kiện chất lượng thực tế ngoài thị trường và ước lượng giá hợp lý.
+        4. BẮT BUỘC chèn đường dẫn liên kết dạng markdown: [Tên linh kiện](/product/slug) đối với bất kỳ sản phẩm nào có trong danh sách kho TechStore dưới đây để khách hàng click mua được ngay.
+        5. ĐỊNH DẠNG cấu trả lời:
+           - Chào khách hàng thân thiện và tóm tắt ngắn gọn cấu hình.
+           - Liệt kê cấu hình chi tiết theo dạng danh sách gạch đầu dòng rõ ràng.
+           - Với mỗi linh kiện trong cấu hình, ghi rõ: Tên linh kiện, lý do chọn, giá bán.
+           - Tính tổng chi phí dự kiến cho toàn bộ cấu hình.
+           - Đưa ra phần "Tính tương thích của cấu hình" để giải thích rõ vì sao các linh kiện hoạt động tốt cùng nhau.
+           - Đưa ra dự kiến FPS cho các game phổ biến (như Valorant, Liên Minh Huyền Thoại, CS2, Cyberpunk 2077) để chứng minh hiệu năng.
+           - Kết thúc bằng một câu cảm ơn lịch sự.
+           
+        ${storeProductsContext}`;
+
+        // Lấy cấu hình hệ thống
+        let settings = await SystemSettings.findOne();
+        const modelName = settings?.chatbotConfig?.model || "llama-3.1-8b-instant";
+        const apiKey = (process.env.GROQ_API_KEY || "").trim();
+        const apiUrl = (process.env.GROQ_URL || "https://api.groq.com/openai/v1").trim();
+
+        if (!apiKey) {
+          throw new Error("GROQ_API_KEY chưa được cấu hình trong file .env");
+        }
+
+        // Tạo hội thoại gửi API
+        const apiMessages = [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Tôi có ngân sách ${formatPriceVND(finalBudVal)}, muốn build ${finalBuildType === "laptop" ? "Laptop" : "PC"} bao gồm: ${finalIncludes}.` }
+        ];
+
+        const response = await axios.post(
+          `${apiUrl}/chat/completions`,
+          {
+            model: modelName,
+            messages: apiMessages,
+            temperature: 0.7,
+            max_tokens: 1500,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        const replyText = response.data.choices[0].message.content;
+
+        // Trả về cấu hình hoàn chỉnh
+        return {
+          reply: replyText,
+          suggestedProducts: allProducts.filter(p => replyText.includes(p.slug)).map(p => p._id)
+        };
+      }
+    }
+
+    // Kiểm tra ý định bắt đầu quy trình build
+    const isStartBuildQuery = /build (pc|laptop|may tinh|cấu hình|cau hinh)|tu van cau hinh|tao cau hinh/i.test(textNormalized);
+    if (isStartBuildQuery) {
+      session.metadata = {
+        isBuildingPC: true,
+        buildStep: 1,
+        buildType: textNormalized.includes("laptop") ? "laptop" : "pc"
+      };
+      session.markModified("metadata");
+
+      return {
+        reply: `🛠️ **Bắt đầu quy trình Tự động Build ${session.metadata.buildType === "laptop" ? "Laptop" : "PC"}**\n\n**Bước 1:** Ngân sách dự kiến của bạn là bao nhiêu?`,
+        suggestedProducts: []
+      };
+    }
+
     // 1. Phân tích từ khóa tìm kiếm nâng cao (Retrieval)
     let matchedProducts = [];
     let upsellProducts = [];
-    const textLower = messageText.toLowerCase();
-
     // Phân tích khoảng giá (vd: "dưới 20tr", "trên 15 triệu", "từ 15 đến 25 triệu")
     let minPrice = null;
     let maxPrice = null;
 
-    const textNormalized = stripDiacritics(textLower);
-
-    // Regex tìm khoảng giá dạng: từ 15 đến 25 triệu, từ 15tr tới 20tr
-    const rangeRegex = /(\d+(?:[.,]\d+)?)\s*(trieu|tr|nghin|ngan|k|d|dong|vnd)?\s*(?:den|toi|tam|-)\s*(\d+(?:[.,]\d+)?)\s*(trieu|tr|nghin|ngan|k|d|dong|vnd)/gi;
+    rangeRegex.lastIndex = 0;
     const rangeMatch = rangeRegex.exec(textNormalized);
 
     if (rangeMatch) {
@@ -355,10 +522,6 @@ const getChatbotReply = async (sessionToken, messageText) => {
     }
 
     // 3. Xây dựng Ngữ cảnh sản phẩm (Product Context) gửi kèm Prompt
-    const formatPriceVND = (num) => {
-      if (num === null || num === undefined) return "0₫";
-      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "₫";
-    };
 
     let productContext = "";
     if (isRAGSkipped) {
@@ -416,7 +579,6 @@ const getChatbotReply = async (sessionToken, messageText) => {
 
 
     // 4. Lấy lịch sử hội thoại gần nhất (Memory) để duy trì ngữ cảnh chat
-    const session = await ChatbotSession.findOne({ sessionToken });
     const messageHistory = [];
     if (session && session.messages && session.messages.length > 0) {
       // Lấy tối đa 6 tin nhắn gần nhất

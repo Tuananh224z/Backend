@@ -41,6 +41,10 @@ const chatbotSessionSchema = new mongoose.Schema(
       enum: ["like", "dislike", null],
       default: null,
     },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
   {
     timestamps: true,
