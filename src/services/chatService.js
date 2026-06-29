@@ -123,6 +123,11 @@ const getChatbotReply = async (sessionToken, messageText) => {
       }
     }
 
+    // Phân tích các tiêu chí lọc đặc biệt
+    const isBestSellerQuery = /ban chay|best\s*seller|bestseller/i.test(textNormalized);
+    const isFeaturedQuery = /noi bat|featured|hot/i.test(textNormalized);
+    const isNewQuery = /moi nhat|moi ve|new/i.test(textNormalized);
+
     // Xây dựng câu truy vấn động
     const query = { isActive: true };
     if (categoryIds.length > 0) {
@@ -140,11 +145,26 @@ const getChatbotReply = async (sessionToken, messageText) => {
         query.price.$lte = maxPrice;
       }
     }
+    if (isBestSellerQuery) {
+      query.isBestSeller = true;
+    }
+    if (isFeaturedQuery) {
+      query.isFeatured = true;
+    }
+    if (isNewQuery) {
+      query.isNewArrival = true;
+    }
 
     // Nhận dạng tin nhắn chào hỏi/xã giao (Small Talk) để bypass RAG
     const smallTalkKeywords = ["chào", "hello", "hi", "hey", "cảm ơn", "cám ơn", "thank", "bye", "tạm biệt", "bạn là ai", "tên gì", "admin", "chủ shop"];
     const cleanText = textLower.trim();
-    const hasFilters = categoryIds.length > 0 || matchedBrandIds.length > 0 || minPrice !== null || maxPrice !== null;
+    const hasFilters = categoryIds.length > 0 || 
+                       matchedBrandIds.length > 0 || 
+                       minPrice !== null || 
+                       maxPrice !== null ||
+                       isBestSellerQuery ||
+                       isFeaturedQuery ||
+                       isNewQuery;
     
     // Nếu không khớp bộ lọc cụ thể nào, và tin nhắn quá ngắn hoặc chứa từ khóa xã giao
     const isSmallTalk = !hasFilters && (
@@ -162,7 +182,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
       isRAGSkipped = true;
     } else {
       // Thực hiện tìm kiếm nâng cao theo bộ lọc trước
-      if (categoryIds.length > 0 || matchedBrandIds.length > 0 || minPrice !== null || maxPrice !== null) {
+      if (categoryIds.length > 0 || matchedBrandIds.length > 0 || minPrice !== null || maxPrice !== null || isBestSellerQuery || isFeaturedQuery || isNewQuery) {
         matchedProducts = await Product.find(query)
           .select("name price discountPrice specs slug")
           .limit(3);
@@ -186,6 +206,10 @@ const getChatbotReply = async (sessionToken, messageText) => {
           if (minPrice !== null) textQuery.price.$gte = minPrice;
           if (maxPrice !== null) textQuery.price.$lte = maxPrice;
         }
+        if (isBestSellerQuery) textQuery.isBestSeller = true;
+        if (isFeaturedQuery) textQuery.isFeatured = true;
+        if (isNewQuery) textQuery.isNewArrival = true;
+
         matchedProducts = await Product.find({
           ...textQuery,
           $text: { $search: messageText }
@@ -217,6 +241,10 @@ const getChatbotReply = async (sessionToken, messageText) => {
             if (minPrice !== null) fallbackQuery.price.$gte = minPrice;
             if (maxPrice !== null) fallbackQuery.price.$lte = maxPrice;
           }
+          if (isBestSellerQuery) fallbackQuery.isBestSeller = true;
+          if (isFeaturedQuery) fallbackQuery.isFeatured = true;
+          if (isNewQuery) fallbackQuery.isNewArrival = true;
+
           matchedProducts = await Product.find({
             ...fallbackQuery,
             $or: [
@@ -300,15 +328,24 @@ const getChatbotReply = async (sessionToken, messageText) => {
     if (isRAGSkipped) {
       productContext = "(Khách đang chào hỏi xã giao hoặc trò chuyện thông thường, không hỏi về sản phẩm cụ thể. Bạn không cần liệt kê sản phẩm nào từ kho, hãy trả lời xã giao ngắn gọn, thân thiện và sẵn sàng tư vấn khi họ cần.)";
     } else {
+      let filterDescriptions = [];
       if (minPrice !== null && maxPrice !== null) {
-        productContext += `YÊU CẦU NGÂN SÁCH CỦA KHÁCH HÀNG: từ ${formatPriceVND(minPrice)} đến ${formatPriceVND(maxPrice)}\n\n`;
+        filterDescriptions.push(`từ ${formatPriceVND(minPrice)} đến ${formatPriceVND(maxPrice)}`);
       } else if (minPrice !== null) {
-        productContext += `YÊU CẦU NGÂN SÁCH CỦA KHÁCH HÀNG: tối thiểu từ ${formatPriceVND(minPrice)}\n\n`;
+        filterDescriptions.push(`tối thiểu từ ${formatPriceVND(minPrice)}`);
       } else if (maxPrice !== null) {
-        productContext += `YÊU CẦU NGÂN SÁCH CỦA KHÁCH HÀNG: tối đa ${formatPriceVND(maxPrice)}\n\n`;
+        filterDescriptions.push(`tối đa ${formatPriceVND(maxPrice)}`);
       }
 
-      productContext += "DANH SÁCH SẢN PHẨM PHÙ HỢP VỚI NGÂN SÁCH KHÁCH HÀNG (Giá <= ngân sách hoặc nằm trong khoảng):\n";
+      if (isBestSellerQuery) filterDescriptions.push("bán chạy nhất");
+      if (isFeaturedQuery) filterDescriptions.push("nổi bật/hot");
+      if (isNewQuery) filterDescriptions.push("mới về/mới nhất");
+
+      if (filterDescriptions.length > 0) {
+        productContext += `YÊU CẦU LỌC CỦA KHÁCH HÀNG: ${filterDescriptions.join(", ")}\n\n`;
+      }
+
+      productContext += "DANH SÁCH SẢN PHẨM PHÙ HỢP VỚI YÊU CẦU CỦA KHÁCH HÀNG:\n";
       if (matchedProducts.length > 0) {
         matchedProducts.forEach((p, idx) => {
           const displayPrice = formatPriceVND(p.price);
