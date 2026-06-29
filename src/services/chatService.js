@@ -185,7 +185,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
       if (categoryIds.length > 0 || matchedBrandIds.length > 0 || minPrice !== null || maxPrice !== null || isBestSellerQuery || isFeaturedQuery || isNewQuery) {
         matchedProducts = await Product.find(query)
           .select("name price discountPrice specs slug")
-          .limit(3);
+          .limit(5);
 
         if (maxPrice) {
           const upsellQuery = { ...query };
@@ -215,7 +215,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
           $text: { $search: messageText }
         })
           .select("name price discountPrice specs slug")
-          .limit(3);
+          .limit(5);
 
         if (maxPrice) {
           upsellProducts = await Product.find({
@@ -253,7 +253,7 @@ const getChatbotReply = async (sessionToken, messageText) => {
             ]
           })
             .select("name price discountPrice specs slug")
-            .limit(3);
+            .limit(5);
 
           if (maxPrice) {
             upsellProducts = await Product.find({
@@ -353,31 +353,27 @@ const getChatbotReply = async (sessionToken, messageText) => {
           
           let priceStr = displayPrice;
           if (originalPrice) {
-            priceStr = `${displayPrice} (đang giảm giá, giá cũ ${originalPrice})`;
+            priceStr = `${displayPrice} (giảm từ ${originalPrice})`;
           }
           
-          productContext += `- ${p.name} - Giá trị số (VNĐ): ${p.price} (${priceStr})\n`;
-          productContext += `  Cấu hình: CPU ${p.specs.cpu || "N/A"}, RAM ${p.specs.ram || "N/A"}, Ổ cứng ${p.specs.storage || "N/A"}, VGA ${p.specs.vga || "N/A"}, Màn hình ${p.specs.screenSize || "N/A"}, HĐH ${p.specs.os || "N/A"}\n`;
-          productContext += `  Link xem chi tiết: /product/${p.slug}\n\n`;
+          productContext += `- [${p.name}](/product/${p.slug}): ${priceStr} - CPU ${p.specs.cpu || "N/A"}, RAM ${p.specs.ram || "N/A"}, SSD ${p.specs.storage || "N/A"}, VGA ${p.specs.vga || "N/A"}, Màn hình ${p.specs.screenSize || "N/A"}\n`;
         });
       } else {
         productContext += "(Không có sản phẩm nào phù hợp ngân sách của khách hàng trong kho)\n\n";
       }
 
       if (maxPrice && upsellProducts.length > 0) {
-        productContext += "DANH SÁCH SẢN PHẨM VƯỢT NGÂN SÁCH MỘT CHÚT (Có thể giới thiệu thêm để khách hàng tham khảo nâng cấp): \n";
+        productContext += "\nDANH SÁCH SẢN PHẨM VƯỢT NGÂN SÁCH MỘT CHÚT (Có thể giới thiệu thêm để khách hàng tham khảo nâng cấp): \n";
         upsellProducts.forEach((p, idx) => {
           const displayPrice = formatPriceVND(p.price);
           const originalPrice = p.discountPrice && p.discountPrice > 0 ? formatPriceVND(p.discountPrice) : null;
           
           let priceStr = displayPrice;
           if (originalPrice) {
-            priceStr = `${displayPrice} (đang giảm giá, giá cũ ${originalPrice})`;
+            priceStr = `${displayPrice} (giảm từ ${originalPrice})`;
           }
           
-          productContext += `- ${p.name} - Giá trị số (VNĐ): ${p.price} (${priceStr})\n`;
-          productContext += `  Cấu hình: CPU ${p.specs.cpu || "N/A"}, RAM ${p.specs.ram || "N/A"}, Ổ cứng ${p.specs.storage || "N/A"}, VGA ${p.specs.vga || "N/A"}, Màn hình ${p.specs.screenSize || "N/A"}, HĐH ${p.specs.os || "N/A"}\n`;
-          productContext += `  Link xem chi tiết: /product/${p.slug}\n\n`;
+          productContext += `- [${p.name}](/product/${p.slug}): ${priceStr} - CPU ${p.specs.cpu || "N/A"}, RAM ${p.specs.ram || "N/A"}, SSD ${p.specs.storage || "N/A"}, VGA ${p.specs.vga || "N/A"}, Màn hình ${p.specs.screenSize || "N/A"}\n`;
         });
       }
     }
